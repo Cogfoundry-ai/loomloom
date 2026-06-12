@@ -10,6 +10,7 @@ AGENT="codex"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 SKILL_DIR="${SKILL_DIR:-}"
 USE_HOMEBREW="auto"
+HOMEBREW_TAP="${LOOMLOOM_HOMEBREW_TAP:-}"
 
 usage() {
   cat <<'EOF'
@@ -199,6 +200,7 @@ can_use_homebrew() {
   [[ "$RELEASE_SOURCE" == "github" ]] || return 1
   [[ "$VERSION" == "latest" ]] || return 1
   [[ "$CHANNEL" == "stable" ]] || return 1
+  [[ -n "$HOMEBREW_TAP" ]] || return 1
   case "$OS" in
     darwin|linux) ;;
     *) return 1 ;;
@@ -298,7 +300,7 @@ if can_use_homebrew; then
   if brew list --versions loomloom >/dev/null 2>&1; then
     brew upgrade loomloom || true
   else
-    brew install ssycloud/tap/loomloom
+    brew install "$HOMEBREW_TAP/loomloom"
   fi
   local_cli_path="$INSTALL_DIR/loomloom"
   if [[ -f "$local_cli_path" ]]; then
@@ -341,6 +343,6 @@ echo "  $CLI_PATH"
 echo "  $(resolve_skill_dir)/SKILL.md"
 echo
 echo "next:"
-echo "  export LOOMLOOM_SERVER=https://loomloom.shengsuanyun.com/batch"
+echo "  export LOOMLOOM_SERVER=<your LoomLoom server URL>"
 echo "  export LOOMLOOM_TOKEN=your-token"
 echo "  loomloom doctor"

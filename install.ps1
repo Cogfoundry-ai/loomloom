@@ -128,7 +128,7 @@ try {
   Write-Host ""
   Write-Host "next:"
   Write-Host "  Add $InstallDir to PATH if needed"
-  Write-Host "  `$env:LOOMLOOM_SERVER='https://loomloom.shengsuanyun.com/batch'"
+  Write-Host "  `$env:LOOMLOOM_SERVER='<your LoomLoom server URL>'"
   Write-Host "  `$env:LOOMLOOM_TOKEN='your-token'"
   Write-Host "  loomloom doctor"
 }

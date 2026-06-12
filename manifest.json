@@ -1,6 +1,6 @@
 {
   "name": "LoomLoom",
-  "description": "Public distribution manifest for the LoomLoom CLI and agent skills for LoomLoom, batchjob, batchflow, 批处理, 批量模板提交, Excel 模板执行, and 结果回填 workflows",
+  "description": "Public distribution manifest for the LoomLoom CLI and agent skills for batch content generation, Excel template execution, artifact downloads, and result backfill workflows",
   "version": "0.2.7",
   "cli": {
     "name": "loomloom",
