@@ -11,7 +11,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$GithubRepo = "SSYCloud/loomloom"
+$GithubRepo = "Cogfoundry-ai/loomloom"
 $GiteeRepo = if ($env:GITEE_REPO) { $env:GITEE_REPO } else { "shengsuanyun/loomloom" }
 $Repo = if ($Source -eq "gitee") { $GiteeRepo } else { $GithubRepo }
 $ApiBase = if ($Source -eq "gitee") { "https://gitee.com/api/v5/repos/$Repo" } else { "https://api.github.com/repos/$Repo" }

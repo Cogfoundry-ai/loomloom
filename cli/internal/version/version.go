@@ -18,7 +18,7 @@ var (
 )
 
 const (
-	repoOwnerRepo      = "SSYCloud/loomloom"
+	repoOwnerRepo      = "Cogfoundry-ai/loomloom"
 	defaultReleaseAPI  = "https://api.github.com/repos/" + repoOwnerRepo + "/releases/latest"
 	defaultHTTPTimeout = 5 * time.Second
 )

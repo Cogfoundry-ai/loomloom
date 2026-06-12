@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/SSYCloud/loomloom/cli/internal/cmd"
+	"github.com/Cogfoundry-ai/loomloom/cli/internal/cmd"
 )
 
 func main() {

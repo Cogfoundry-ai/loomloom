@@ -99,7 +99,7 @@ build_cli() {
     CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" GOWORK=off \
       go build \
         -buildvcs=false \
-        -ldflags "-X github.com/SSYCloud/loomloom/cli/internal/version.Version=${VERSION}" \
+        -ldflags "-X github.com/Cogfoundry-ai/loomloom/cli/internal/version.Version=${VERSION}" \
         -o "$output_path" \
         ./cmd/loomloom
   )

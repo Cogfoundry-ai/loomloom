@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/SSYCloud/loomloom/cli/internal/client"
-	templatespecdocs "github.com/SSYCloud/loomloom/cli/internal/template_spec_docs"
+	"github.com/Cogfoundry-ai/loomloom/cli/internal/client"
+	templatespecdocs "github.com/Cogfoundry-ai/loomloom/cli/internal/template_spec_docs"
 	"github.com/spf13/cobra"
 )
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GITHUB_REPO="SSYCloud/loomloom"
+GITHUB_REPO="Cogfoundry-ai/loomloom"
 GITEE_REPO="${GITEE_REPO:-shengsuanyun/loomloom}"
 RELEASE_SOURCE="${LOOMLOOM_RELEASE_SOURCE:-github}"
 VERSION="${VERSION:-latest}"

@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/SSYCloud/loomloom/cli/internal/client"
-	"github.com/SSYCloud/loomloom/cli/internal/version"
+	"github.com/Cogfoundry-ai/loomloom/cli/internal/client"
+	"github.com/Cogfoundry-ai/loomloom/cli/internal/version"
 	"github.com/spf13/cobra"
 )
 

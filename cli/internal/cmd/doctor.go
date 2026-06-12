@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/SSYCloud/loomloom/cli/internal/version"
+	"github.com/Cogfoundry-ai/loomloom/cli/internal/version"
 	"github.com/spf13/cobra"
 )
 
