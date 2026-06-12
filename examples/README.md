@@ -2,7 +2,7 @@
 
 These are starter inputs for hosted LoomLoom templates.
 
-If you still call the workflow `batchjob`, `batchflow`, or “批处理”, those names map to the same LoomLoom template flow.
+If you still call the workflow `batchjob`, `batchflow`, or "batch processing", those names map to the same LoomLoom template flow.
 
 - `text-image-v1.input.jsonl`
 - `text-image-video-v1.input.jsonl`

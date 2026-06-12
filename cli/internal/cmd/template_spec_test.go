@@ -170,9 +170,9 @@ func TestLoadTemplateSpecFile_AllowsThreeVisibleFieldParamBinding(t *testing.T) 
   "meta": {"name": "Three Field Prompt Spec"},
   "steps": [{"stepId": "stp_text", "displayName": "Text", "executionUnit": "text-generate"}],
   "inputSchema": {"fields": [
-    {"key": "body", "label": "正文内容", "valueType": "string"},
-    {"key": "style", "label": "风格要求", "valueType": "string"},
-    {"key": "format", "label": "输出格式", "valueType": "string"}
+    {"key": "body", "label": "Body content", "valueType": "string"},
+    {"key": "style", "label": "Style requirements", "valueType": "string"},
+    {"key": "format", "label": "Output format", "valueType": "string"}
   ]},
   "paramBindings": [{
     "stepId": "stp_text",
@@ -261,7 +261,7 @@ func TestTemplateSpecDocsCmdPrintsConversation(t *testing.T) {
 		t.Fatalf("docs conversation command error = %v", err)
 	}
 	output := out.String()
-	for _, want := range []string{"# Conversational Template Authoring", "TemplatePlan", "一次只问一个问题"} {
+	for _, want := range []string{"# Conversational Template Authoring", "TemplatePlan", "Ask one question at a time"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q: %s", want, output)
 		}
@@ -279,7 +279,7 @@ func TestTemplateSpecDocsCmdPrintsSpec(t *testing.T) {
 		t.Fatalf("docs spec command error = %v", err)
 	}
 	output := out.String()
-	for _, want := range []string{"# TemplateSpec Specification", "Step-Level Fan-In", "AllowMultiple", "最多 3 个普通可见字段来源"} {
+	for _, want := range []string{"# TemplateSpec Specification", "Step-Level Fan-In", "target port allows multiple inputs", "at most three regular visible field sources"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q: %s", want, output)
 		}

@@ -1,327 +1,291 @@
-# LoomLoom README
-
 # LoomLoom
 
-> **Batch content generation platform** —— Use natural language to orchestrate AI workflows for copy, image, and video generation.
-> Built by CogFoundry · [github.com/Cogfoundry-ai/loomloom](https://github.com/Cogfoundry-ai/loomloom)
+> **Batch content generation platform** - Use natural language to orchestrate AI workflows for copy, image, and video generation.
+> Built by CogFoundry - [github.com/Cogfoundry-ai/loomloom](https://github.com/Cogfoundry-ai/loomloom)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Cogfoundry-ai/loomloom/1-overview)
 
 ---
 
-## ✨ 它能做什么？
+## What It Does
 
-LoomLoom 是一个面向 AI 驱动批量内容生产的平台工具。你不需要写代码，只需用自然语言告诉 AI 你想做什么，它会自动完成从模板下载、数据填写、任务提交到结果下载的全流程。
+LoomLoom is a CLI and agent skill package for AI-driven batch content workflows. Instead of writing workflow code by hand, describe the task in natural language and let an agent download templates, prepare data, submit runs, watch progress, and download results.
 
-**典型场景：**
+Common use cases:
 
-- 📄 **批量文案写作** —— 100 条产品描述、改写、摘要、问答，文件批量修改，一次搞定
-- 🖼️ **批量图片生成** —— 电商配图、社媒插画、概念图，按行批出
-- 🎬 **批量视频制作** —— 短剧分镜、广告素材，文字到视频全自动
+- **Batch copywriting** - product descriptions, rewrites, summaries, Q&A, and file-level text changes.
+- **Batch image generation** - e-commerce imagery, social assets, concept art, and row-by-row visual generation.
+- **Batch video generation** - storyboards, ad assets, and text-to-video workflows.
 
 ---
 
-## 🤖 支持的 AI 平台
+## Supported Agents
 
-安装 LoomLoom 后，以下平台将获得操作批处理任务的「技能包」：
+Installing LoomLoom adds a matching skill package for the selected agent:
 
-| 平台 | 支持状态 |
+| Agent | Status |
 | --- | --- |
-| **Codex**（OpenAI） | ✅ 支持 |
-| **Claude Code**（Anthropic） | ✅ 支持 |
-| **OpenClaw** | ✅ 支持 |
+| **Codex** (OpenAI) | Supported |
+| **Claude Code** (Anthropic) | Supported |
+| **OpenClaw** | Supported |
 
 ---
 
-## ⚡ 快速开始
+## Quick Start
 
-### 方式一：超简模式（推荐）
+### Agent-assisted setup
 
-把以下这段话发给 Codex / Claude / OpenClaw，将 `your-token` 替换为你的真实 Token，Agent 会自动完成安装与配置：
+Send a message like this to Codex, Claude Code, or OpenClaw. Replace `your-token` and `<your LoomLoom server URL>` with the values from your CogFoundry workspace.
 
+```text
+Install LoomLoom from this GitHub repository: https://github.com/Cogfoundry-ai/loomloom
+My server URL is <your LoomLoom server URL>, and my token is your-token.
+After installation, run doctor to check whether the setup is healthy.
 ```
-请你去这个 GitHub 项目安装 LoomLoom：https://github.com/Cogfoundry-ai/loomloom
-我的服务器地址是 <your LoomLoom server URL>，Token 是 your-token
-安装好之后帮我跑一下 doctor 检查是否正常
-```
 
-### 方式二：自己安装
+### Manual installation
 
-**macOS / Linux：**
+macOS / Linux:
 
 ```bash
-# 默认安装（Codex 技能包）
+# Default install with the Codex skill package
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash
 
-# Claude 用户
+# Claude Code
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --agent claude
 
-# OpenClaw 用户
+# OpenClaw
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --agent openclaw
 
-# 指定版本
+# Specific version
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.2.7
 
-# 内测版本：安装当前最新 beta
+# Latest beta or internal channel
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta --no-brew
 
-# 内测版本：安装指定 pre-release tag
+# Specific pre-release tag
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.2.6-beta.9 --no-brew
 ```
 
-> 如果系统有 Homebrew，安装脚本会优先使用 Homebrew 安装 CLI；可加 `--no-brew` 改用二进制包。
-> `latest` 和 Homebrew 只面向正式版本；`beta` / `rc` / `internal` 内测版本需要通过 `--channel` 或 `--version` 显式安装。
-
-**已经安装过，如何更新？**
-
-重复执行安装命令即可覆盖更新本机 CLI 和对应技能包：
-
-```bash
-# 更新到当前正式版
-curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash
-
-# 更新到当前最新 beta
-curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta --no-brew
-
-# 更新到指定 beta tag；当最新 beta 刚发布、channel 解析还未刷新时推荐使用
-curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.2.6-beta.9 --no-brew
-```
-
-**Windows（PowerShell）：**
+Windows PowerShell:
 
 ```powershell
-# 默认安装
+# Default install
 irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1 | iex
 
-# Claude 用户
+# Claude Code
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Agent claude
 
-# OpenClaw 用户
+# OpenClaw
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Agent openclaw
 
-# 内测版本：安装当前最新 beta
+# Latest beta or internal channel
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Channel beta
 
-# 内测版本：安装指定 pre-release tag
+# Specific pre-release tag
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Version v0.2.6-beta.9
 ```
 
-> Windows 默认安装路径：`$HOME\AppData\Local\Programs\loomloom`，若未自动加入 PATH，请手动添加。
-
-**Homebrew（仅 CLI）：**
-
-CogFoundry Homebrew distribution will be enabled after the CogFoundry tap is published. For now, use the install script above.
-
-> 注意：Homebrew 仅安装 CLI，不含技能包。如需技能包请使用上方安装脚本。
+Homebrew distribution will be enabled after the CogFoundry tap is published. For now, use the install script above.
 
 ---
 
-## 🔑 配置 Token
+## Configure Credentials
 
 ```bash
 export LOOMLOOM_SERVER="<your LoomLoom server URL>"
 export LOOMLOOM_TOKEN="your-token"
 ```
 
-> 建议写入 `~/.zshrc` 或 `~/.bashrc`，避免每次重新设置。CLI 仍兼容旧的 `BATCHJOB_SERVER` / `BATCHJOB_TOKEN`，但新配置建议统一使用 `LOOMLOOM_*`。Token 请从你的 CogFoundry workspace 获取。
+Add these values to `~/.zshrc`, `~/.bashrc`, or your shell profile if you do not want to set them again for every session. The CLI still accepts the legacy `BATCHJOB_SERVER` and `BATCHJOB_TOKEN` variables for compatibility, but new setups should use `LOOMLOOM_*`.
+
+Get the token from your CogFoundry workspace.
 
 ---
 
-## ✅ 验证安装
+## Verify Installation
 
 ```bash
 loomloom doctor
 ```
 
-看到绿色提示即表示环境配置正常，可以开始使用 🎉
+If the environment is healthy, you can start submitting template runs.
 
 ---
 
-## 📦 三种任务模板
+## Built-In Templates
 
-| 模板 ID | 适合场景 | 输出类型 | 底层步骤 |
+| Template ID | Use case | Output | Steps |
 | --- | --- | --- | --- |
-| `text-v1` | 文案写作、改写、摘要、问答、代码审查 | 📄 文本 / 文件 | 1 步：文本生成 |
-| `text-image-v1` | 插画、概念图、社媒配图 | 🖼️ 图片 | 2 步：提示词整理 → 出图 |
-| `text-image-video-v1` | 短剧、广告视频批量制作 | 🖼️ 图片 + 🎬 视频 | 3 步：描述 → 出图 → 出视频 |
+| `text-v1` | Copywriting, rewriting, summaries, Q&A, and code review | Text / files | Text generation |
+| `text-image-v1` | Illustrations, concept art, and social images | Image | Prompt preparation -> image generation |
+| `text-image-video-v1` | Storyboards, ads, and short video assets | Image + video | Description -> image -> video |
 
-## 🔄 标准工作流（Excel 模板）
+---
+
+## Standard Excel Workflow
 
 ```bash
-# 1. 下载模板
+# 1. Download a workbook template
 loomloom template download text-image-v1 --output-file ./task.xlsx
 
-# 2. 填写 Excel 后，校验格式
+# 2. Fill the workbook and validate it
 loomloom template validate-file text-image-v1 ./task.xlsx
 
-# 3. 提交任务
+# 3. Submit the workbook
 loomloom template submit-file text-image-v1 ./task.xlsx
 
-# 4. 监控进度（获取 run-id 后执行）
+# 4. Watch progress
 loomloom run watch <run-id>
 
-# 5. 下载服务端生成的结果 Excel（保留原始输入并追加结果列）
+# 5. Download the server-generated result workbook
 loomloom run result-workbook <run-id> --output-file ./task.result.xlsx
 
-# 6. 下载生成文件
+# 6. Download generated artifacts
 loomloom artifact download <run-id> --output-dir ./downloads
 ```
 
-> `template backfill-results` 仍可用于本地旧流程；新后端优先推荐 `run result-workbook`，由服务端基于提交时保存的输入快照生成结果表，避免本地 Excel 与 run 结果对不齐。
+`template backfill-results` is still available for older local workflows. For new workflows, prefer `run result-workbook`; the server uses the submitted input snapshot to align original rows with results.
 
 ---
 
-## 📝 模板字段说明
+## Template Fields
 
-### 📄 文本模板 `text-v1`
+### Text template: `text-v1`
 
-| 字段 | 是否必填 | 说明 |
+| Field | Required | Description |
 | --- | --- | --- |
-| 文本提示词 | ⭐ 必填 | 主任务描述，如"把这段介绍改写为中文，80-120字" |
-| 写作要求 | 选填 | 补充风格或格式要求 |
-| 参考文本 | 选填 | 短内容直接填入；长内容先用 `input-asset upload` 上传，填入返回的 `input_asset_id` |
+| Text prompt | Required | Main task prompt, such as "Rewrite this introduction in 80-120 words." |
+| Writing requirements | Optional | Style, format, or output constraints. |
+| Reference text | Optional | Inline short text, or upload a large file with `input-asset upload` and use the returned `input_asset_id`. |
 
-### 🖼️ 生图模板 `text-image-v1`
+### Image template: `text-image-v1`
 
-| 字段 | 是否必填 | 说明 |
+| Field | Required | Description |
 | --- | --- | --- |
-| 图片提示词 | ⭐ 必填 | 描述想要的图片内容 |
-| 风格要求 | 选填 | 如"水彩风格"、"写实风格" |
-| 图片比例 | ⭐ 必填 | `1:1` / `4:5` / `16:9` / `9:16` |
+| Image prompt | Required | Description of the image to generate. |
+| Style requirements | Optional | For example, watercolor, photorealistic, or studio style. |
+| Image aspect ratio | Required | `1:1`, `4:5`, `16:9`, or `9:16`. |
 
-### 🎬 生视频模板 `text-image-video-v1`
+### Video template: `text-image-video-v1`
 
-| 字段 | 是否必填 | 说明 |
+| Field | Required | Description |
 | --- | --- | --- |
-| 画面描述 | ⭐ 必填 | 描述视频画面内容 |
-| 视觉风格要求 | 选填 | 如"电影色调"、"动漫风格" |
-| 参考图片URL | 选填 | 仅支持 1 张公网可访问图片（http/https 开头） |
-| 图片比例 | ⭐ 必填 | `1:1` / `4:5` / `16:9` / `9:16` |
-| 视频比例 | ⭐ 必填 | `16:9` / `9:16` |
-| 视频时长（秒） | ⭐ 必填 | `4` / `6` / `8` |
-| 是否生成声音 | ⭐ 必填 | `false` / `true` |
+| Scene description | Required | Description of the video scene. |
+| Visual style requirements | Optional | For example, cinematic tone or anime style. |
+| Reference image URL | Optional | One public HTTP/HTTPS image URL. |
+| Image aspect ratio | Required | `1:1`, `4:5`, `16:9`, or `9:16`. |
+| Video aspect ratio | Required | `16:9` or `9:16`. |
+| Video duration | Required | `4`, `6`, or `8` seconds. |
+| Generate audio | Required | `false` or `true`. |
 
 ---
 
-## 📤 大文件上传（Input Asset）
+## Input Assets
 
-当参考文本较大，不适合直接填入 Excel 时，先上传文件获取 ID：
+For large reference files, upload the file first and place the returned `input_asset_id` in the template field.
 
 ```bash
-loomloom input-asset upload ./my-reference.txt
+loomloom input-asset upload ./brief.txt --content-type text/plain
 loomloom input-asset upload ./diagram.png --content-type image/png
 ```
 
-返回的 `input_asset_id` 填入模板"参考文本"字段即可。
+---
+
+## Run Status
+
+Use your CogFoundry workspace console URL to inspect run progress online.
+
+| Status | Meaning |
+| --- | --- |
+| Queued | The run was submitted and is waiting for scheduling. |
+| Running | The run is in progress. |
+| Finished | All rows reached a terminal state and results are available. |
+| Partially failed | Some rows failed, but successful rows can still be downloaded. |
+| Failed | The run failed as a whole. |
+| Expired | Results expired and the run should be submitted again if needed. |
 
 ---
 
-## 📊 任务进度查看
+## Command Reference
 
-所有任务运行状态可在线查看：
-
-**👉 Use your CogFoundry workspace console URL.**
-
-| 状态 | 含义 |
+| Command | Description |
 | --- | --- |
-| ⚪ 排队中 | 任务已提交，等待调度 |
-| 🔵 执行中 | 任务运行中，请耐心等待 |
-| 🟢 已结束 | 全部行执行完成，可下载结果 |
-| 🟡 部分失败 | 任务完成但部分行出错，成功行仍可下载 |
-| 🔴 失败 | 任务整体失败，请检查输入数据 |
-| ⏰ 已过期 | 结果已过期，需重新提交 |
+| `loomloom doctor` | Check local configuration. |
+| `loomloom template list` | List available templates. |
+| `loomloom template schema <id>` | Show template fields. |
+| `loomloom template download <id>` | Download an Excel workbook template. |
+| `loomloom template validate-file <id> <xlsx>` | Validate a filled workbook. |
+| `loomloom template submit-file <id> <xlsx>` | Submit a filled workbook. |
+| `loomloom run result-rows <run-id>` | Show aligned input rows and results. |
+| `loomloom run result-workbook <run-id>` | Download a server-generated result workbook. |
+| `loomloom template backfill-results <run-id> <xlsx>` | Legacy local result backfill. |
+| `loomloom run submit <id> -f rows.jsonl` | Submit JSONL input. |
+| `loomloom run watch <run-id>` | Watch run progress. |
+| `loomloom artifact list <run-id>` | List generated artifacts. |
+| `loomloom artifact download <run-id>` | Download generated artifacts. |
+| `loomloom input-asset upload <file>` | Upload a large input asset. |
+| `loomloom template-spec check <spec.json>` | Validate a custom TemplateSpec. |
+| `loomloom template-spec docs [topic]` | Show bundled TemplateSpec documentation. |
+| `loomloom template-spec models <step-type>` | List models for a step type. |
+| `loomloom template-spec create <spec.json>` | Create a private template. |
+| `loomloom template-spec create-version <template-id> <spec.json>` | Add a new version to an existing private template. |
+| `loomloom template-spec download-workbook <template-id> <version-id>` | Download a user-template workbook. |
+| `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx>` | Validate a user-template workbook. |
+| `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx>` | Submit a user-template workbook. |
 
 ---
 
-## 🗂️ 完整 CLI 命令速查
+## Custom Templates
 
-| 命令 | 说明 |
-| --- | --- |
-| `loomloom doctor` | 检查环境配置是否正常 |
-| `loomloom template list` | 查看可用模板列表 |
-| `loomloom template schema <id>` | 查看模板字段说明 |
-| `loomloom template download <id>` | 下载 Excel 模板 |
-| `loomloom template validate-file <id> <xlsx>` | 校验 Excel 填写格式 |
-| `loomloom template submit-file <id> <xlsx>` | 提交任务 |
-| `loomloom run result-rows <run-id>` | 查看服务端对齐后的输入行和结果 |
-| `loomloom run result-workbook <run-id>` | 下载服务端生成的结果 Excel |
-| `loomloom template backfill-results <run-id> <xlsx>` | 本地旧流程：结果回写到指定 Excel |
-| `loomloom run submit <id> -f rows.jsonl` | 高级：JSONL 方式提交 |
-| `loomloom run watch <run-id>` | 监控任务进度 |
-| `loomloom artifact list <run-id>` | 查看生成文件列表 |
-| `loomloom artifact download <run-id>` | 下载所有生成文件 |
-| `loomloom input-asset upload <file>` | 上传大文件获取 ID |
-| `loomloom template-spec check <spec.json>` | 检查自定义模板 JSON |
-| `loomloom template-spec docs [topic]` | 查看随 CLI 发布的 TemplateSpec 规范快照 |
-| `loomloom template-spec models <step-type>` | 查看自定义模板 step 可用模型 |
-| `loomloom template-spec create <spec.json>` | 创建私有模板并保存版本 |
-| `loomloom template-spec create-version <template-id> <spec.json>` | 为已有私有模板追加新版本 |
-| `loomloom template-spec download-workbook <template-id> <version-id>` | 下载用户模板 Excel |
-| `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx>` | 校验用户模板 Excel |
-| `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx>` | 提交用户模板 Excel |
-
-## 🧩 自定义模板（Agent / 开发者）
-
-自定义模板使用 `TemplateSpec JSON` 描述模板步骤、输入字段和字段绑定关系。第一版推荐由 agent 或开发者生成 JSON，再通过 CLI 创建模板版本。
+Custom templates use TemplateSpec JSON to describe workflow steps, input fields, and field bindings. A typical agent-assisted authoring flow is:
 
 ```bash
-# 1. 查看某类 step 可用模型，并把返回的 model_id 写入 defaultModelRef.modelKey
-loomloom template-spec docs spec
-loomloom template-spec docs examples
-loomloom template-spec docs conversation
+# 1. Check available models for an execution unit
 loomloom template-spec models text-generate
-loomloom template-spec models image-generate
-loomloom template-spec models video-generate
 
-# 2. 本地检查 JSON 基本结构
-loomloom template-spec check ./spec.json
+# 2. Validate the spec locally
+loomloom template-spec check ./my-template.spec.json
 
-# 3. 创建私有模板并保存版本
-loomloom template-spec create ./spec.json --version-note "initial version"
+# 3. Create a private template
+loomloom template-spec create ./my-template.spec.json --version-note "initial version"
 
-# 4. 已有模板需要更新时，追加一个新版本
-loomloom template-spec create-version <template-id> ./spec.json --version-note "fix version"
+# 4. Add a new version when the template changes
+loomloom template-spec create-version <template-id> ./my-template.spec.json
 
-# 5. 下载该模板版本对应的 Excel workbook
+# 5. Download, fill, validate, and submit the workbook
 loomloom template-spec download-workbook <template-id> <version-id> --output-file ./input.xlsx
-
-# 6. 填写 Excel 后校验
 loomloom template-spec validate-workbook <template-id> <version-id> ./input.xlsx
-
-# 7. 提交运行
 loomloom template-spec submit-workbook <template-id> <version-id> ./input.xlsx
 ```
 
-注意：
+Notes:
 
-- `TemplateSpec JSON` 是模板主数据，Excel workbook 是派生文件。
-- 写自定义模板前，先用 `loomloom template-spec docs spec` 查看随 CLI 发布的规范快照；需要例子时用 `loomloom template-spec docs examples`。
-- 如果由 agent 通过自然语言帮用户创建模板，先用 `loomloom template-spec docs conversation` 查看对话式创建流程：先整理 TemplatePlan 设计稿，用户确认后再生成 TemplateSpec。
-- TemplateSpec 文件推荐使用 OpenAPI 暴露的 lowerCamel 字段名，例如 `meta.name`、`steps[].stepId`、`defaultModelRef.modelKey`。
-- 步骤关系使用 step-level `dependsOn` + `upstreamBindings` 表达；上游输出端口通常是 `output`，目标输入端口由 execution unit 的 port contract 限制。
-- 多上游 fan-in 只有在目标输入端口 `AllowMultiple=true`、来源类型匹配 `Accepts`，且有明确 `MergePolicy` 时才合法。
-- 模板版本变化后，应重新下载 workbook。
-- 只有 step 明确开放模型覆盖时，workbook 中才会出现该步骤的模型选择列。
-- `submit-workbook` 会创建真实批量任务，使用 agent 操作时应先向用户确认。
+- TemplateSpec JSON is the source of truth; workbooks are generated artifacts.
+- Review the bundled spec with `loomloom template-spec docs spec` before writing custom specs.
+- Use `loomloom template-spec docs examples` for patterns.
+- Use `loomloom template-spec docs conversation` for agent-assisted conversational authoring.
+- Template changes require downloading a new workbook.
+- `submit-workbook` creates a real hosted run; agents should ask for explicit confirmation before submitting.
 
 ---
 
-## 🗑️ 卸载
+## Uninstall
 
-**macOS / Linux：**
+macOS / Linux:
 
 ```bash
-# 全部卸载
+# Remove CLI and skill package
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/uninstall.sh | bash
 
-# 仅卸载 CLI
+# Remove CLI only
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/uninstall.sh | bash -s -- --cli-only
 
-# 仅卸载技能包
+# Remove skill package only
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/uninstall.sh | bash -s -- --skill-only
 ```
 
-**Windows：**
+Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/uninstall.ps1 | iex
@@ -329,28 +293,23 @@ irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/uninstall.ps1 
 
 ---
 
-## 🙋 常见问题
+## FAQ
 
-**Q：不会用终端怎么办？**
+**Where do I get a token?**
 
-Mac 用户按 `Command + 空格` 搜索「终端」；Windows 用户按 `Win 键` 搜索「PowerShell」，打开后粘贴命令回车即可，无需懂代码。
+Get a token from your CogFoundry workspace and replace `your-token` in the examples.
 
-**Q：Token 去哪里获取？**
+**Why does `template list` return no templates?**
 
-从你的 CogFoundry workspace 获取 Token 字符串后替换命令里的 `your-token`。
+The account or environment may not have visible templates. Ask your CogFoundry workspace administrator to confirm template publication and permissions.
 
-**Q：`template list` 显示 no templates 怎么办？**
+**Can I use the CLI manually without an agent?**
 
-`no templates` 是旧版本里的历史提示，这个提示现在已经去除了。
-如果 `loomloom template list` 没有返回任何模板，通常表示当前账号或环境下暂无可见模板，联系你的 CogFoundry workspace 管理员确认模板发布状态或权限配置即可。
-
-**Q：可以不用 AI，手动操作吗？**
-
-完全可以。所有功能均可通过 CLI 命令手动执行，参见上方命令速查表。
+Yes. Every workflow can be run with the CLI commands above.
 
 ---
 
-## 🔗 相关链接
+## Links
 
-- 📦 GitHub 项目：[github.com/Cogfoundry-ai/loomloom](http://github.com/Cogfoundry-ai/loomloom)
-- 📊 任务进度看板：使用你的 CogFoundry workspace 控制台地址
+- GitHub: [github.com/Cogfoundry-ai/loomloom](https://github.com/Cogfoundry-ai/loomloom)
+- Console: use your CogFoundry workspace console URL.

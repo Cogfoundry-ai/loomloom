@@ -1,18 +1,18 @@
 {
   "meta": {
-    "name": "商品图生成",
-    "description": "根据商品信息批量生成图片",
+    "name": "Product Image Generation",
+    "description": "Generate product images in batches from product information",
     "scenario": "product-image",
-    "inputSummary": "商品名称、图片风格",
-    "displayOutputType": "图片",
+    "inputSummary": "Product name and image style",
+    "displayOutputType": "Image",
     "primaryOutputType": "image"
   },
   "steps": [
     {
       "stepId": "stp_prompt",
-      "displayName": "提示词整理",
+      "displayName": "Prompt preparation",
       "executionUnit": "text-generate",
-      "instruction": "根据商品名称和风格要求整理图片提示词。",
+      "instruction": "Prepare an image prompt from the product name and style requirements.",
       "defaultModelRef": {
         "modelKey": "google/gemini-2.5-flash"
       },
@@ -20,9 +20,9 @@
     },
     {
       "stepId": "stp_image",
-      "displayName": "图片生成",
+      "displayName": "Image generation",
       "executionUnit": "image-generate",
-      "instruction": "根据整理后的提示词生成图片。",
+      "instruction": "Generate an image from the prepared prompt.",
       "dependsOn": ["stp_prompt"],
       "upstreamBindings": [
         {
@@ -45,39 +45,39 @@
     "fields": [
       {
         "key": "product_name",
-        "label": "商品名称",
+        "label": "Product name",
         "required": true,
         "valueType": "string",
         "order": 1
       },
       {
         "key": "style",
-        "label": "图片风格",
+        "label": "Image style",
         "valueType": "enum",
-        "enumValues": ["极简棚拍", "电商白底", "生活方式摄影"],
+        "enumValues": ["Minimal studio shot", "E-commerce white background", "Lifestyle photography"],
         "order": 2
       },
       {
         "key": "text_model",
-        "label": "提示词整理模型（可选）",
+        "label": "Prompt model (optional)",
         "valueType": "string",
         "order": 3
       },
       {
         "key": "image_model",
-        "label": "图片生成模型（可选）",
+        "label": "Image model (optional)",
         "valueType": "string",
         "order": 4
       }
     ],
     "instructions": [
-      "每行生成一张商品图。",
-      "模型列可留空，留空时使用模板默认模型。"
+      "Each row generates one product image.",
+      "Model columns may be left blank; blank values use the template defaults."
     ],
     "sampleRows": [
       {
-        "product_name": "一盏未来感桌面台灯",
-        "style": "极简棚拍"
+        "product_name": "A futuristic desk lamp",
+        "style": "Minimal studio shot"
       }
     ]
   },
@@ -104,7 +104,7 @@
       "sources": [
         {
           "kind": "literal",
-          "literal": "请根据以下商品生成图片提示词。商品："
+          "literal": "Generate an image prompt for this product: "
         },
         {
           "kind": "field_ref",
@@ -112,7 +112,7 @@
         },
         {
           "kind": "literal",
-          "literal": "风格："
+          "literal": "Style: "
         },
         {
           "kind": "field_ref",

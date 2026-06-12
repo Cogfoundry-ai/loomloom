@@ -49,20 +49,20 @@ DEFAULT_EXCLUDES = (
 )
 
 DEFAULT_PROMPT = (
-    "请审查这个代码文件，重点关注："
-    "1. 内存、句柄、连接或其他资源泄漏风险；"
-    "2. 隐私、敏感信息、凭证或用户数据泄漏风险；"
-    "3. 明显不安全写法；"
-    "4. 可维护性较差、容易出错的实现方式。"
-    "如果没有发现高置信问题，请明确写“未发现高置信问题”。"
+    "Review this code file with focus on: "
+    "1. memory, handle, connection, or other resource leak risks; "
+    "2. privacy, sensitive information, credential, or user data leak risks; "
+    "3. clearly unsafe implementation patterns; "
+    "4. maintainability issues or error-prone implementation choices. "
+    "If you do not find any high-confidence issues, say so explicitly."
 )
 
 DEFAULT_WRITING_REQUIREMENTS = (
-    "中文输出。仅根据当前文件内容判断，不要编造跨文件事实。"
-    "请按以下结构输出："
-    "【文件结论】一句话总结；"
-    "【发现列表】按严重程度排序，每项包含 问题类型 / 严重程度 / 证据 / 原因 / 建议；"
-    "【上下文缺口】如果需要更多上下文才能确认，请单独说明。"
+    "Write in English. Judge only from the current file content and do not invent cross-file facts. "
+    "Use this structure: "
+    "[File conclusion] one-sentence summary; "
+    "[Findings] sorted by severity, each with issue type / severity / evidence / rationale / recommendation; "
+    "[Context gaps] call out any missing context needed for confirmation."
 )
 
 
@@ -220,7 +220,7 @@ def main() -> int:
         for path in selected:
             reference_text, _ = build_reference_text(repo, path, args.max_bytes_per_file)
             row = {
-                "text_prompts": f"{args.prompt}\n目标文件：{path.relative_to(repo)}",
+                "text_prompts": f"{args.prompt}\nTarget file: {path.relative_to(repo)}",
                 "writing_requirements": args.writing_requirements,
                 "reference_text": reference_text,
             }
