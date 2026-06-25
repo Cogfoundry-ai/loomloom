@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Cogfoundry-ai/loomloom/cli/internal/client"
@@ -30,6 +32,13 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       version.Version,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			opts.output = strings.ToLower(strings.TrimSpace(opts.output))
+			if opts.output != "text" && opts.output != "json" {
+				return fmt.Errorf("unsupported output format %q; use text or json", opts.output)
+			}
+			return nil
+		},
 	}
 
 	cmd.PersistentFlags().StringVarP(&opts.server, "server", "s", opts.server, "LoomLoom base URL or host")
@@ -45,7 +54,14 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		newDoctorCmd(opts),
+		newModelCmd(opts),
+		newAssetCmd(opts),
+		newMarketCmd(opts),
+		newListingCmd(opts),
+		newCreatorCmd(opts),
+		newUsageCmd(opts),
 		newInputAssetCmd(opts),
+		newOrchestrationInputCmd(opts),
 		newRunCmd(opts),
 		newTemplateCmd(opts),
 		newTemplateSpecCmd(opts),

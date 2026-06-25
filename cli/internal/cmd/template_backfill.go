@@ -29,7 +29,7 @@ func newTemplateBackfillResultsCmd(opts *rootOptions) *cobra.Command {
 			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
 			defer cancel()
 
-			resp, err := httpClient.GetBinary(ctx, "/v1/batch/workflow-runs/"+runID+"/result-workbook")
+			resp, err := httpClient.GetBinary(ctx, "/users/me/runs/"+runID+"/resultWorkbook")
 			if err != nil {
 				return err
 			}

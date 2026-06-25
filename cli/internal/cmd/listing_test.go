@@ -1,0 +1,266 @@
+package cmd
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestListingUnlistUsesUnlistEndpointWithoutCreatorUserID(t *testing.T) {
+	var requestedPath string
+	var requestedQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
+		requestedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"listing-1","sale_status":"unlisted"}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingUnlistCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing unlist command error = %v", err)
+	}
+	if requestedPath != "/loom/v1/marketListings/listing-1:unlist" {
+		t.Fatalf("path=%q want unlist endpoint", requestedPath)
+	}
+	if requestedQuery != "" {
+		t.Fatalf("query=%q want no identity query", requestedQuery)
+	}
+	if !strings.Contains(out.String(), `"sale_status": "unlisted"`) {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
+}
+
+func TestListingUpdateDescriptionPreservesCurrentDisplayName(t *testing.T) {
+	var updateBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/creators/me/marketListings/listing-1":
+			_, _ = w.Write([]byte(`{"displayName":"Current name","description":"Old description"}`))
+		case "/loom/v1/marketListings/listing-1:updatePublicProfile":
+			if err := json.NewDecoder(r.Body).Decode(&updateBody); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"id":"review-1","status":"pending"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingUpdateCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--description", "New description"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing update command error = %v", err)
+	}
+	if updateBody["displayName"] != "Current name" {
+		t.Fatalf("displayName=%v want Current name", updateBody["displayName"])
+	}
+	if updateBody["description"] != "New description" {
+		t.Fatalf("description=%v want New description", updateBody["description"])
+	}
+}
+
+func TestListingUpdateDisplayNamePreservesCurrentDescription(t *testing.T) {
+	var updateBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/creators/me/marketListings/listing-1":
+			_, _ = w.Write([]byte(`{"displayName":"Current name","description":"Current description"}`))
+		case "/loom/v1/marketListings/listing-1:updatePublicProfile":
+			if err := json.NewDecoder(r.Body).Decode(&updateBody); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"id":"review-1","status":"pending"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingUpdateCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--display-name", "New name"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing update command error = %v", err)
+	}
+	if updateBody["displayName"] != "New name" {
+		t.Fatalf("displayName=%v want New name", updateBody["displayName"])
+	}
+	if updateBody["description"] != "Current description" {
+		t.Fatalf("description=%v want Current description", updateBody["description"])
+	}
+}
+
+func TestListingUpdateWithBothFieldsSkipsCurrentProfileLookup(t *testing.T) {
+	var requestedPaths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPaths = append(requestedPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"review-1","status":"pending"}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingUpdateCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--display-name", "New name", "--description", "New description"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing update command error = %v", err)
+	}
+	if len(requestedPaths) != 1 || requestedPaths[0] != "/loom/v1/marketListings/listing-1:updatePublicProfile" {
+		t.Fatalf("requested paths=%v want only update endpoint", requestedPaths)
+	}
+}
+
+func TestListingUpdateRejectsMissingCurrentDisplayName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"displayName":"","description":"Current description"}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingUpdateCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--description", "New description"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "display name is required") {
+		t.Fatalf("error=%v want missing display name error", err)
+	}
+}
+
+func TestListingWithdrawResolvesPendingReviewAndPassesReason(t *testing.T) {
+	var requestedQuery string
+	var withdrawBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/creators/me/marketReviewRequests":
+			requestedQuery = r.URL.RawQuery
+			_, _ = w.Write([]byte(`{"items":[
+				{"id":"review-other","listingId":"listing-other","status":"pending"},
+				{"id":"review-1","listingId":"listing-1","status":"pending"}
+			]}`))
+		case "/loom/v1/creators/me/marketReviewRequests/review-1:withdraw":
+			if err := json.NewDecoder(r.Body).Decode(&withdrawBody); err != nil {
+				t.Fatalf("decode withdraw body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"id":"review-1","status":"withdrawn"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingWithdrawCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1", "--reason", "cancelled by creator"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing withdraw command error = %v", err)
+	}
+	if requestedQuery != "pageSize=500&status=pending" {
+		t.Fatalf("query=%q want pending reviews with page size 500", requestedQuery)
+	}
+	if withdrawBody["reason"] != "cancelled by creator" {
+		t.Fatalf("reason=%v want cancelled by creator", withdrawBody["reason"])
+	}
+	if !strings.Contains(out.String(), `"status": "withdrawn"`) {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
+}
+
+func TestListingWithdrawReportsListFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"temporary failure"}`, http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingWithdrawCmd(opts)
+	cmd.SetArgs([]string{"listing-1"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "list pending review requests") {
+		t.Fatalf("error=%v want list failure context", err)
+	}
+}
+
+func TestListingWithdrawReportsWithdrawFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/creators/me/marketReviewRequests":
+			_, _ = w.Write([]byte(`{"items":[{"id":"review-1","listingId":"listing-1","status":"pending"}]}`))
+		case "/loom/v1/creators/me/marketReviewRequests/review-1:withdraw":
+			http.Error(w, `{"error":"conflict"}`, http.StatusConflict)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingWithdrawCmd(opts)
+	cmd.SetArgs([]string{"listing-1"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "withdraw pending review request review-1") {
+		t.Fatalf("error=%v want withdraw failure context", err)
+	}
+}
+
+func TestListingWithdrawRejectsMissingPendingReview(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[]}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingWithdrawCmd(opts)
+	cmd.SetArgs([]string{"listing-1"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "has no pending review request") {
+		t.Fatalf("error=%v want no pending review error", err)
+	}
+}
+
+func TestListingWithdrawRejectsMultiplePendingReviews(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[
+			{"id":"review-2","listingId":"listing-1","status":"pending"},
+			{"id":"review-1","listingId":"listing-1","status":"pending"}
+		]}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingWithdrawCmd(opts)
+	cmd.SetArgs([]string{"listing-1"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "review-1, review-2") {
+		t.Fatalf("error=%v want sorted conflicting review IDs", err)
+	}
+}

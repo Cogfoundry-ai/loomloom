@@ -66,7 +66,7 @@ func newInputAssetUploadCmd(opts *rootOptions) *cobra.Command {
 			defer cancel()
 
 			var resp uploadInputAssetResponse
-			if err := httpClient.PostJSON(ctx, "/v1/batch/input-assets:upload", req, &resp); err != nil {
+			if err := httpClient.PostJSON(ctx, "/inputAssets:upload", req, &resp); err != nil {
 				return err
 			}
 

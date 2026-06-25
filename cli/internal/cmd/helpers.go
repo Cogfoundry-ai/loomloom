@@ -18,6 +18,8 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 type flexInt64 int64
@@ -76,10 +78,52 @@ type precheckTemplateRowsResponse struct {
 	BalanceCheck       *templateBalanceCheck `json:"balanceCheck"`
 }
 
+func (r *precheckTemplateRowsResponse) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		EstimatedTotalCost  flexInt64             `json:"estimatedTotalCost"`
+		EstimatedTotalCostT flexInt64             `json:"estimatedTotalCostT"`
+		BalanceCheck        *templateBalanceCheck `json:"balanceCheck"`
+	}
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	r.EstimatedTotalCost = parsed.EstimatedTotalCost
+	if r.EstimatedTotalCost == 0 {
+		r.EstimatedTotalCost = parsed.EstimatedTotalCostT
+	}
+	r.BalanceCheck = parsed.BalanceCheck
+	return nil
+}
+
 type submitTemplateRowsResponse struct {
 	RunID      string    `json:"runId"`
 	Status     string    `json:"status"`
 	AcceptedAt flexInt64 `json:"acceptedAt"`
+}
+
+func (r *submitTemplateRowsResponse) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		RunID             string    `json:"runId"`
+		Status            string    `json:"status"`
+		AcceptedAt        flexInt64 `json:"acceptedAt"`
+		AcceptedAtUnix    flexInt64 `json:"acceptedAtUnix"`
+		AcceptedAtUnixAlt flexInt64 `json:"accepted_at_unix"`
+	}
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	r.RunID = parsed.RunID
+	r.Status = parsed.Status
+	r.AcceptedAt = parsed.AcceptedAt
+	if r.AcceptedAt == 0 {
+		r.AcceptedAt = parsed.AcceptedAtUnix
+	}
+	if r.AcceptedAt == 0 {
+		r.AcceptedAt = parsed.AcceptedAtUnixAlt
+	}
+	return nil
 }
 
 type runStatusResponse struct {
@@ -92,9 +136,13 @@ type runStatusResponse struct {
 	CompletedTasks    flexInt   `json:"completedTasks"`
 	FailedTasks       flexInt   `json:"failedTasks"`
 	CancelledTasks    flexInt   `json:"cancelledTasks"`
-	ActualCost        flexInt64 `json:"actualCost"`
+	ActualCost        flexInt64 `json:"actualCostT"`
 	StartedAtUnix     flexInt64 `json:"startedAtUnix"`
 	CompletedAtUnix   flexInt64 `json:"completedAtUnix"`
+}
+
+type runGetResponse struct {
+	Run runStatusResponse `json:"run"`
 }
 
 type artifactEntry struct {
@@ -129,8 +177,83 @@ type listRunArtifactsResponse struct {
 	TotalCount    int             `json:"totalCount"`
 }
 
+func (r *listRunArtifactsResponse) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		Artifacts     []artifactEntry `json:"artifacts"`
+		Items         []artifactEntry `json:"items"`
+		NextPageToken string          `json:"nextPageToken"`
+		TotalCount    int             `json:"totalCount"`
+	}
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	r.Artifacts = parsed.Artifacts
+	if len(r.Artifacts) == 0 {
+		r.Artifacts = parsed.Items
+	}
+	r.NextPageToken = parsed.NextPageToken
+	r.TotalCount = parsed.TotalCount
+	return nil
+}
+
 func newTabWriter(w io.Writer) *tabwriter.Writer {
 	return tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+}
+
+func writeIndentedJSON(w io.Writer, value any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(value)
+}
+
+func readJSONFileMap(filePath string) (map[string]any, error) {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return nil, errors.New("--input-file is required")
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("read input file: %w", err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, errors.New("input file is empty")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, fmt.Errorf("parse input JSON: %w", err)
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	return payload, nil
+}
+
+func removeIdentityFields(payload map[string]any) {
+	for _, field := range []string{
+		"user_id",
+		"buyer_user_id",
+		"creator_user_id",
+		"userId",
+		"buyerUserId",
+		"creatorUserId",
+	} {
+		delete(payload, field)
+	}
+}
+
+func effectiveClientRequestID(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value, false
+	}
+	return fmt.Sprintf("loomloom-cli-%d", time.Now().UnixNano()), true
+}
+
+func printGeneratedClientRequestID(cmd *cobra.Command, value string, generated bool) {
+	if generated {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "clientRequestId: %s\n", value)
+	}
 }
 
 func formatUnix(ts int64) string {
@@ -279,6 +402,22 @@ func printInputAssetUpload(w io.Writer, resp uploadInputAssetResponse) error {
 	return nil
 }
 
+func printOrchestrationInputUpload(w io.Writer, resp uploadOrchestrationInputResponse) error {
+	if _, err := fmt.Fprintf(w, "input_file_id\t%s\n", resp.InputFileID); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "filename\t%s\n", resp.Filename); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "row_count\t%d\n", resp.RowCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "uploaded_at\t%s\n", formatUnix(int64(resp.UploadedAt))); err != nil {
+		return err
+	}
+	return nil
+}
+
 func printArtifacts(w io.Writer, artifacts []artifactEntry) error {
 	tw := newTabWriter(w)
 	if _, err := fmt.Fprintln(tw, "artifact_id\ttask_id\tstep_id\tmime_type\tport\trow\tcreated_at\taccess"); err != nil {
@@ -358,6 +497,18 @@ func normalizeRows(rows []map[string]any) ([]templateDisplayRow, error) {
 		normalized = append(normalized, templateDisplayRow{Values: values})
 	}
 	return normalized, nil
+}
+
+func templateRowsPayload(rows []templateDisplayRow) []map[string]string {
+	payloadRows := make([]map[string]string, 0, len(rows))
+	for _, row := range rows {
+		values := make(map[string]string, len(row.Values))
+		for key, value := range row.Values {
+			values[key] = value
+		}
+		payloadRows = append(payloadRows, values)
+	}
+	return payloadRows
 }
 
 func remapRowsToHeaderLabels(rows []templateDisplayRow, schema templateSchemaResponse) []templateDisplayRow {

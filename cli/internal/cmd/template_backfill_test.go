@@ -27,7 +27,7 @@ func TestTemplateBackfillResultsCmdDownloadsServerResultWorkbook(t *testing.T) {
 	}
 
 	opts := &rootOptions{
-		server:  server.URL,
+		server:  server.URL + "/loom/v1",
 		timeout: time.Second,
 		output:  "json",
 	}
@@ -39,7 +39,7 @@ func TestTemplateBackfillResultsCmdDownloadsServerResultWorkbook(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("backfill-results command error = %v", err)
 	}
-	if requestedPath != "/v1/batch/workflow-runs/run_123/result-workbook" {
+	if requestedPath != "/loom/v1/users/me/runs/run_123/resultWorkbook" {
 		t.Fatalf("path=%q want result-workbook endpoint", requestedPath)
 	}
 	data, err := os.ReadFile(inputPath)

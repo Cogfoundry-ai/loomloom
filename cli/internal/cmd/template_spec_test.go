@@ -16,9 +16,9 @@ func TestLoadTemplateSpecFile_ValidSpec(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "spec.json")
 	content := `{
   "Meta": {"Name": "Spec Test", "Description": "desc"},
-  "Steps": [{"StepID": "stp_text", "DisplayName": "Text", "ExecutionUnit": "text-generate"}],
+  "Steps": [{"StepID": "stp_text01", "DisplayName": "Text", "ExecutionUnit": "text-generate"}],
   "InputSchema": {"Fields": [{"Key": "prompt", "Label": "Prompt", "ValueType": "string"}]},
-  "FieldBindings": [{"FieldKey": "prompt", "StepID": "stp_text", "ParamKey": "prompt", "BindMode": "shared"}]
+  "FieldBindings": [{"FieldKey": "prompt", "StepID": "stp_text01", "ParamKey": "prompt", "BindMode": "shared"}]
 }`
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write spec: %v", err)
@@ -46,7 +46,7 @@ func TestLoadTemplateSpecFile_MissingName(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "spec.json")
 	content := `{
   "Meta": {},
-  "Steps": [{"StepID": "stp_text"}],
+  "Steps": [{"StepID": "stp_text01"}],
   "InputSchema": {"Fields": []},
   "FieldBindings": []
 }`
@@ -64,7 +64,7 @@ func TestLoadTemplateSpecFile_NormalizesPascalCaseUpstreamBindings(t *testing.T)
 	content := `{
   "Meta": {"Name": "Initial Input Binding Spec"},
   "Steps": [{
-    "StepID": "stp_text",
+    "StepID": "stp_text01",
     "DisplayName": "Text",
     "ExecutionUnit": "text-generate",
     "UpstreamBindings": [{
@@ -105,10 +105,10 @@ func TestLoadTemplateSpecFile_AllowsParamBindingOnlySpec(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "spec.json")
 	content := `{
   "meta": {"name": "Param Binding Spec"},
-  "steps": [{"stepId": "stp_text", "displayName": "Text", "executionUnit": "text-generate"}],
+  "steps": [{"stepId": "stp_text01", "displayName": "Text", "executionUnit": "text-generate"}],
   "inputSchema": {"fields": [{"key": "prompt", "label": "Prompt", "valueType": "string"}]},
   "paramBindings": [{
-    "stepId": "stp_text",
+    "stepId": "stp_text01",
     "paramKey": "prompt",
     "bindMode": "shared",
     "sources": [{"kind": "field_ref", "fieldKey": "prompt"}]
@@ -137,7 +137,7 @@ func TestLoadTemplateSpecFile_RejectsTextReferenceFieldBindingToPrompt(t *testin
 	path := filepath.Join(t.TempDir(), "spec.json")
 	content := `{
   "meta": {"name": "Invalid Text Reference Binding"},
-  "steps": [{"stepId": "stp_text", "displayName": "Text", "executionUnit": "text-generate"}],
+  "steps": [{"stepId": "stp_text01", "displayName": "Text", "executionUnit": "text-generate"}],
   "inputSchema": {"fields": [{
     "key": "patent_input",
     "label": "Patent Input",
@@ -146,7 +146,7 @@ func TestLoadTemplateSpecFile_RejectsTextReferenceFieldBindingToPrompt(t *testin
   }]},
   "fieldBindings": [{
     "fieldKey": "patent_input",
-    "stepId": "stp_text",
+    "stepId": "stp_text01",
     "paramKey": "prompt",
     "bindMode": "shared"
   }]
@@ -168,14 +168,14 @@ func TestLoadTemplateSpecFile_AllowsThreeVisibleFieldParamBinding(t *testing.T) 
 	path := filepath.Join(t.TempDir(), "spec.json")
 	content := `{
   "meta": {"name": "Three Field Prompt Spec"},
-  "steps": [{"stepId": "stp_text", "displayName": "Text", "executionUnit": "text-generate"}],
+  "steps": [{"stepId": "stp_text01", "displayName": "Text", "executionUnit": "text-generate"}],
   "inputSchema": {"fields": [
-    {"key": "body", "label": "Body content", "valueType": "string"},
+    {"key": "body", "label": "Body", "valueType": "string"},
     {"key": "style", "label": "Style requirements", "valueType": "string"},
     {"key": "format", "label": "Output format", "valueType": "string"}
   ]},
   "paramBindings": [{
-    "stepId": "stp_text",
+    "stepId": "stp_text01",
     "paramKey": "prompt",
     "bindMode": "shared",
     "separator": "\n\n",
@@ -206,10 +206,10 @@ func TestTemplateSpecCheckCmdCountsParamBindings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "spec.json")
 	content := `{
   "meta": {"name": "Param Binding Spec"},
-  "steps": [{"stepId": "stp_text", "displayName": "Text", "executionUnit": "text-generate"}],
+  "steps": [{"stepId": "stp_text01", "displayName": "Text", "executionUnit": "text-generate"}],
   "inputSchema": {"fields": [{"key": "prompt", "label": "Prompt", "valueType": "string"}]},
   "paramBindings": [{
-    "stepId": "stp_text",
+    "stepId": "stp_text01",
     "paramKey": "prompt",
     "bindMode": "shared",
     "sources": [{"kind": "field_ref", "fieldKey": "prompt"}]
@@ -279,7 +279,7 @@ func TestTemplateSpecDocsCmdPrintsSpec(t *testing.T) {
 		t.Fatalf("docs spec command error = %v", err)
 	}
 	output := out.String()
-	for _, want := range []string{"# TemplateSpec Specification", "Step-Level Fan-In", "target port allows multiple inputs", "at most three regular visible field sources"} {
+	for _, want := range []string{"# TemplateSpec Specification", "Step-Level Fan-In", "allows multiple inputs", "at most three regular visible field sources"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q: %s", want, output)
 		}
@@ -335,7 +335,7 @@ func TestTemplateSpecModelsCmdListsAvailableModels(t *testing.T) {
 	defer server.Close()
 
 	opts := &rootOptions{
-		server:  server.URL,
+		server:  server.URL + "/loom/v1",
 		timeout: time.Second,
 		output:  "text",
 	}
@@ -347,8 +347,8 @@ func TestTemplateSpecModelsCmdListsAvailableModels(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("models command error = %v", err)
 	}
-	if requestedPath != "/v1/batch/models" {
-		t.Fatalf("path=%q want /v1/batch/models", requestedPath)
+	if requestedPath != "/loom/v1/models" {
+		t.Fatalf("path=%q want /loom/v1/models", requestedPath)
 	}
 	for _, want := range []string{"stepType=text-generate", "onlyAvailable=true"} {
 		if !strings.Contains(requestedQuery, want) {
@@ -373,7 +373,7 @@ func TestTemplateSpecModelsCmdCanFilterProvider(t *testing.T) {
 	defer server.Close()
 
 	opts := &rootOptions{
-		server:  server.URL,
+		server:  server.URL + "/loom/v1",
 		timeout: time.Second,
 		output:  "json",
 	}
@@ -394,9 +394,9 @@ func TestTemplateSpecCreateVersionPostsCanonicalSpec(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "spec.json")
 	content := `{
   "Meta": {"Name": "Spec Test", "Description": "desc"},
-  "Steps": [{"StepID": "stp_text", "DisplayName": "Text", "ExecutionUnit": "text-generate"}],
+  "Steps": [{"StepID": "stp_text01", "DisplayName": "Text", "ExecutionUnit": "text-generate"}],
   "InputSchema": {"Fields": [{"Key": "prompt", "Label": "Prompt", "ValueType": "string"}]},
-  "FieldBindings": [{"FieldKey": "prompt", "StepID": "stp_text", "ParamKey": "prompt", "BindMode": "shared"}]
+  "FieldBindings": [{"FieldKey": "prompt", "StepID": "stp_text01", "ParamKey": "prompt", "BindMode": "shared"}]
 }`
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write spec: %v", err)
@@ -415,7 +415,7 @@ func TestTemplateSpecCreateVersionPostsCanonicalSpec(t *testing.T) {
 	defer server.Close()
 
 	opts := &rootOptions{
-		server:  server.URL,
+		server:  server.URL + "/loom/v1",
 		timeout: time.Second,
 		output:  "json",
 	}
@@ -427,8 +427,8 @@ func TestTemplateSpecCreateVersionPostsCanonicalSpec(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("create-version command error = %v", err)
 	}
-	if requestedPath != "/v1/user-templates/tmpl_123/versions" {
-		t.Fatalf("path=%q want /v1/user-templates/tmpl_123/versions", requestedPath)
+	if requestedPath != "/loom/v1/users/me/templates/tmpl_123/versions" {
+		t.Fatalf("path=%q want /loom/v1/users/me/templates/tmpl_123/versions", requestedPath)
 	}
 	if payload["versionNote"] != "fix judge template" {
 		t.Fatalf("versionNote=%q", payload["versionNote"])
@@ -461,7 +461,7 @@ func TestTemplateSpecModelsCmdCanIncludeUnavailableModels(t *testing.T) {
 	defer server.Close()
 
 	opts := &rootOptions{
-		server:  server.URL,
+		server:  server.URL + "/loom/v1",
 		timeout: time.Second,
 		output:  "json",
 	}
@@ -494,10 +494,10 @@ func TestTemplateSpecSubmitWorkbookSendsFilename(t *testing.T) {
 			t.Fatalf("decode request: %v", err)
 		}
 		switch r.URL.Path {
-		case "/v1/batch/user-template-workbook:validate":
+		case "/loom/v1/users/me/templates/tmpl_123/versions/ver_123:validateWorkbook":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"valid":true}`))
-		case "/v1/batch/user-template-workbook:submit":
+		case "/loom/v1/users/me/templates/tmpl_123/versions/ver_123:runWorkbook":
 			submitFilename, _ = payload["filename"].(string)
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"runId":"run_123","status":"pending","acceptedAt":"1777699967"}`))
@@ -508,7 +508,7 @@ func TestTemplateSpecSubmitWorkbookSendsFilename(t *testing.T) {
 	defer server.Close()
 
 	opts := &rootOptions{
-		server:  server.URL,
+		server:  server.URL + "/loom/v1",
 		timeout: time.Second,
 		output:  "json",
 	}
@@ -525,5 +525,132 @@ func TestTemplateSpecSubmitWorkbookSendsFilename(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"runId": "run_123"`) {
 		t.Fatalf("output missing run id: %s", out.String())
+	}
+}
+
+func TestTemplateSpecSubmitWorkbookPrintsGeneratedClientRequestID(t *testing.T) {
+	workbookPath := filepath.Join(t.TempDir(), "custom-input.xlsx")
+	if err := os.WriteFile(workbookPath, []byte("xlsx bytes"), 0o644); err != nil {
+		t.Fatalf("write workbook: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/users/me/templates/tmpl_123/versions/ver_123:validateWorkbook":
+			_, _ = w.Write([]byte(`{"valid":true}`))
+		case "/loom/v1/users/me/templates/tmpl_123/versions/ver_123:runWorkbook":
+			http.Error(w, `{"error":"temporary failure"}`, http.StatusServiceUnavailable)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newTemplateSpecSubmitWorkbookCmd(opts)
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"tmpl_123", "ver_123", workbookPath})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("submit-workbook error = nil, want request failure")
+	}
+	if !strings.Contains(stderr.String(), "clientRequestId: loomloom-cli-") {
+		t.Fatalf("stderr=%q want generated clientRequestId before request failure", stderr.String())
+	}
+}
+
+func TestTemplateSpecRunPrintsGeneratedClientRequestIDBeforeRequestFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loom/v1/users/me/templates/tmpl_123:run" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		http.Error(w, `{"error":"temporary failure"}`, http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newTemplateSpecRunCmd(opts)
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{
+		"tmpl_123",
+		"--version-id", "ver_123",
+		"--input-file-id", "ec1015c0-5078-4409-84b5-b46ddc3e9312",
+	})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("template-spec run error = nil, want request failure")
+	}
+	if !strings.Contains(stderr.String(), "clientRequestId: loomloom-cli-") {
+		t.Fatalf("stderr=%q want generated clientRequestId before request failure", stderr.String())
+	}
+}
+
+func TestTemplateSpecRunRejectsInputAssetID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("server should not be called with an inputAssetId")
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newTemplateSpecRunCmd(opts)
+	cmd.SetArgs([]string{
+		"tmpl_123",
+		"--version-id", "ver_123",
+		"--input-file-id", "ia_example",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("template-spec run error = nil, want inputAssetId rejection")
+	}
+	if !strings.Contains(err.Error(), "orchestrationInputs:upload") ||
+		!strings.Contains(err.Error(), "inputAssets:upload") {
+		t.Fatalf("error=%q want upload endpoint guidance", err)
+	}
+}
+
+func TestTemplateSpecCheckRejectsInvalidStepID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid-step-id.json")
+	content := `{
+		"meta":{"name":"Invalid"},
+		"steps":[{"stepId":"stp_text","executionUnit":"text-generate"}],
+		"inputSchema":{"fields":[{"key":"prompt","label":"Prompt","valueType":"string"}]}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	opts := &rootOptions{output: "json"}
+	cmd := newTemplateSpecCheckCmd(opts)
+	cmd.SetArgs([]string{path})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "must match stp_<6-10 base36 chars>") {
+		t.Fatalf("error=%v want invalid step ID", err)
+	}
+}
+
+func TestTemplateSpecCheckRejectsUnwrappedSampleRows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid-sample-rows.json")
+	content := `{
+		"meta":{"name":"Invalid"},
+		"steps":[{"stepId":"stp_text01","executionUnit":"text-generate"}],
+		"inputSchema":{
+			"fields":[{"key":"prompt","label":"Prompt","valueType":"string"}],
+			"sampleRows":[{"prompt":"hello"}]
+		}
+	}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write spec: %v", err)
+	}
+
+	opts := &rootOptions{output: "json"}
+	cmd := newTemplateSpecCheckCmd(opts)
+	cmd.SetArgs([]string{path})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "must wrap field values in a values object") {
+		t.Fatalf("error=%v want invalid sample row shape", err)
 	}
 }
