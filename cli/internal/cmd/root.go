@@ -1,0 +1,86 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/Cogfoundry-ai/loomloom/cli/internal/client"
+	"github.com/Cogfoundry-ai/loomloom/cli/internal/version"
+	"github.com/spf13/cobra"
+)
+
+type rootOptions struct {
+	server  string
+	token   string
+	timeout time.Duration
+	output  string
+}
+
+func NewRootCmd() *cobra.Command {
+	opts := &rootOptions{
+		server:  envOrDefault("LOOMLOOM_SERVER", os.Getenv("BATCHJOB_SERVER")),
+		token:   envOrDefault("LOOMLOOM_TOKEN", os.Getenv("BATCHJOB_TOKEN")),
+		timeout: 30 * time.Second,
+		output:  "text",
+	}
+
+	cmd := &cobra.Command{
+		Use:           "loomloom",
+		Short:         "Developer CLI for LoomLoom workflows",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Version:       version.Version,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			opts.output = strings.ToLower(strings.TrimSpace(opts.output))
+			if opts.output != "text" && opts.output != "json" {
+				return fmt.Errorf("unsupported output format %q; use text or json", opts.output)
+			}
+			return nil
+		},
+	}
+
+	cmd.PersistentFlags().StringVarP(&opts.server, "server", "s", opts.server, "LoomLoom base URL or host")
+	if serverFlag := cmd.PersistentFlags().Lookup("server"); serverFlag != nil {
+		serverFlag.DefValue = ""
+	}
+	cmd.PersistentFlags().StringVarP(&opts.token, "token", "t", opts.token, "Bearer token")
+	cmd.PersistentFlags().DurationVar(&opts.timeout, "timeout", opts.timeout, "HTTP timeout")
+	cmd.PersistentFlags().StringVarP(&opts.output, "output", "o", opts.output, "Output format: text|json")
+	if tokenFlag := cmd.PersistentFlags().Lookup("token"); tokenFlag != nil {
+		tokenFlag.DefValue = ""
+	}
+
+	cmd.AddCommand(
+		newDoctorCmd(opts),
+		newModelCmd(opts),
+		newAssetCmd(opts),
+		newMarketCmd(opts),
+		newListingCmd(opts),
+		newCreatorCmd(opts),
+		newUsageCmd(opts),
+		newInputAssetCmd(opts),
+		newOrchestrationInputCmd(opts),
+		newRunCmd(opts),
+		newTemplateCmd(opts),
+		newTemplateSpecCmd(opts),
+		newArtifactCmd(opts),
+	)
+	return cmd
+}
+
+func newHTTPClient(opts *rootOptions) (*client.Client, error) {
+	return client.New(client.Config{
+		BaseURL: opts.server,
+		Token:   opts.token,
+		Timeout: opts.timeout,
+	})
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
