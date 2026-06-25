@@ -65,18 +65,12 @@ func normalizeBaseURL(raw string) (string, error) {
 		return "", fmt.Errorf("invalid server URL: %s", raw)
 	}
 	path := strings.TrimRight(u.Path, "/")
-	switch {
-	case path == "":
-		u.Path = ""
-	case path == "/batch":
-		u.Path = "/batch"
-	default:
-		u.Path = path
-	}
+	u.Path = path
 	return strings.TrimRight(u.String(), "/"), nil
 }
 
 func (c *Client) endpoint(path string) string {
+	path = "/" + strings.TrimLeft(path, "/")
 	return c.baseURL + path
 }
 
@@ -105,7 +99,31 @@ func (c *Client) GetJSONWithQuery(ctx context.Context, path string, query url.Va
 	return decodeResponse(resp, out)
 }
 
+func (c *Client) GetProductJSON(ctx context.Context, path string, out any) error {
+	return c.GetJSONWithQuery(ctx, path, nil, out)
+}
+
+func (c *Client) GetProductJSONWithQuery(ctx context.Context, path string, query url.Values, out any) error {
+	return c.GetJSONWithQuery(ctx, path, query, out)
+}
+
 func (c *Client) PostJSON(ctx context.Context, path string, in any, out any) error {
+	return c.postJSON(ctx, c.endpoint(path), in, out)
+}
+
+func (c *Client) PostProductJSON(ctx context.Context, path string, in any, out any) error {
+	return c.PostJSON(ctx, path, in, out)
+}
+
+func (c *Client) PostProductJSONWithQuery(ctx context.Context, path string, query url.Values, in any, out any) error {
+	endpoint := c.endpoint(path)
+	if len(query) > 0 {
+		endpoint += "?" + query.Encode()
+	}
+	return c.postJSON(ctx, endpoint, in, out)
+}
+
+func (c *Client) postJSON(ctx context.Context, endpoint string, in any, out any) error {
 	var body io.Reader
 	if in != nil {
 		payload, err := json.Marshal(in)
@@ -114,7 +132,7 @@ func (c *Client) PostJSON(ctx context.Context, path string, in any, out any) err
 		}
 		body = bytes.NewReader(payload)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path), body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
 		return err
 	}

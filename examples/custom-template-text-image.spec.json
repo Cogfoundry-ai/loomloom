@@ -19,7 +19,7 @@
       "allowModelOverride": true
     },
     {
-      "stepId": "stp_image",
+      "stepId": "stp_image1",
       "displayName": "Image generation",
       "executionUnit": "image-generate",
       "instruction": "Generate an image from the prepared prompt.",
@@ -76,8 +76,10 @@
     ],
     "sampleRows": [
       {
-        "product_name": "A futuristic desk lamp",
-        "style": "Minimal studio shot"
+        "values": {
+          "product_name": "A futuristic desk lamp",
+          "style": "Minimal studio shot"
+        }
       }
     ]
   },
@@ -90,7 +92,7 @@
     },
     {
       "fieldKey": "image_model",
-      "stepId": "stp_image",
+      "stepId": "stp_image1",
       "paramKey": "model",
       "bindMode": "shared"
     }

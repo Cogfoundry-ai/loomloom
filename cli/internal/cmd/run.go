@@ -22,17 +22,111 @@ func newRunCmd(opts *rootOptions) *cobra.Command {
 	cmd.AddCommand(
 		newRunSubmitCmd(opts),
 		newRunWatchCmd(opts),
+		newRunListCmd(opts),
+		newRunGetCmd(opts),
 		newRunResultRowsCmd(opts),
 		newRunResultWorkbookCmd(opts),
 	)
 	return cmd
 }
 
+func newRunListCmd(opts *rootOptions) *cobra.Command {
+	var (
+		status    string
+		pageSize  int
+		pageToken string
+		orderBy   string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List Product API runs with optional Market context",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			httpClient, err := newHTTPClient(opts)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			defer cancel()
+
+			query := url.Values{}
+			if strings.TrimSpace(status) != "" {
+				query.Set("status", strings.TrimSpace(status))
+			}
+			if pageSize > 0 {
+				query.Set("pageSize", fmt.Sprintf("%d", pageSize))
+			}
+			if strings.TrimSpace(pageToken) != "" {
+				query.Set("pageToken", strings.TrimSpace(pageToken))
+			}
+			if strings.TrimSpace(orderBy) != "" {
+				normalizedOrderBy, err := normalizeRunOrderBy(orderBy)
+				if err != nil {
+					return err
+				}
+				query.Set("orderBy", normalizedOrderBy)
+			}
+
+			var resp map[string]any
+			if err := httpClient.GetProductJSONWithQuery(ctx, "/users/me/runs", query, &resp); err != nil {
+				return err
+			}
+			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+		},
+	}
+	cmd.Flags().StringVar(&status, "status", "", "Run status filter")
+	cmd.Flags().IntVar(&pageSize, "page-size", 50, "Page size")
+	cmd.Flags().StringVar(&pageToken, "page-token", "", "Page token")
+	cmd.Flags().StringVar(&orderBy, "order-by", "", "Order by createdAt or updatedAt (asc or desc)")
+	return cmd
+}
+
+func normalizeRunOrderBy(value string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "createdat", "created_at")
+	normalized = strings.ReplaceAll(normalized, "updatedat", "updated_at")
+	normalized = strings.Join(strings.Fields(normalized), "_")
+
+	switch normalized {
+	case "created_at_asc", "created_at_desc", "updated_at_asc", "updated_at_desc":
+		return normalized, nil
+	default:
+		return "", fmt.Errorf(
+			"invalid --order-by %q: use createdAt asc, createdAt desc, updatedAt asc, or updatedAt desc",
+			value,
+		)
+	}
+}
+
+func newRunGetCmd(opts *rootOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <run-id>",
+		Short: "Get one Product API run detail with optional Market context",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			httpClient, err := newHTTPClient(opts)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			defer cancel()
+
+			query := url.Values{}
+			var resp map[string]any
+			path := "/users/me/runs/" + url.PathEscape(strings.TrimSpace(args[0]))
+			if err := httpClient.GetProductJSONWithQuery(ctx, path, query, &resp); err != nil {
+				return err
+			}
+			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+		},
+	}
+}
+
 func newRunSubmitCmd(opts *rootOptions) *cobra.Command {
 	var (
-		inputPath      string
-		callbackURL    string
-		idempotencyKey string
+		inputPath       string
+		callbackURL     string
+		clientRequestID string
 	)
 
 	cmd := &cobra.Command{
@@ -57,24 +151,22 @@ func newRunSubmitCmd(opts *rootOptions) *cobra.Command {
 			defer cancel()
 
 			var schemaResp templateSchemaResponse
-			if err := httpClient.GetJSON(ctx, "/v1/templates/"+args[0]+"/schema", &schemaResp); err != nil {
+			if err := httpClient.GetJSON(ctx, "/officialTemplates/"+args[0]+"/schema", &schemaResp); err != nil {
 				return err
 			}
 			rows = remapRowsToHeaderLabels(rows, schemaResp)
 
+			requestID, generatedRequestID := effectiveClientRequestID(clientRequestID)
 			payload := map[string]any{
-				"templateId": args[0],
-				"rows":       rows,
+				"rows":            templateRowsPayload(rows),
+				"clientRequestId": requestID,
 			}
 			if callbackURL != "" {
 				payload["callbackUrl"] = callbackURL
 			}
-			if idempotencyKey != "" {
-				payload["idempotencyKey"] = idempotencyKey
-			}
 
 			var validateResp validateTemplateRowsResponse
-			if err := httpClient.PostJSON(ctx, "/v1/templates:validate-rows", payload, &validateResp); err != nil {
+			if err := httpClient.PostJSON(ctx, "/officialTemplates/"+args[0]+":validateRows", payload, &validateResp); err != nil {
 				return err
 			}
 			if !validateResp.Valid {
@@ -91,15 +183,16 @@ func newRunSubmitCmd(opts *rootOptions) *cobra.Command {
 			}
 
 			var precheckResp precheckTemplateRowsResponse
-			if err := httpClient.PostJSON(ctx, "/v1/templates:precheck-rows", payload, &precheckResp); err != nil {
+			if err := httpClient.PostJSON(ctx, "/officialTemplates/"+args[0]+":precheckRows", payload, &precheckResp); err != nil {
 				return err
 			}
 			if balance := precheckResp.BalanceCheck; balance != nil && !balance.IsSufficient {
 				return fmt.Errorf("insufficient balance: estimated_cost=%s available=%s", formatCost(int64(precheckResp.EstimatedTotalCost)), formatCost(int64(balance.AvailableBalance)))
 			}
 
+			printGeneratedClientRequestID(cmd, requestID, generatedRequestID)
 			var submitResp submitTemplateRowsResponse
-			if err := httpClient.PostJSON(ctx, "/v1/templates:submit-rows", payload, &submitResp); err != nil {
+			if err := httpClient.PostJSON(ctx, "/officialTemplates/"+args[0]+":runRows", payload, &submitResp); err != nil {
 				return err
 			}
 
@@ -109,6 +202,7 @@ func newRunSubmitCmd(opts *rootOptions) *cobra.Command {
 				"rowCount":           len(rows),
 				"estimatedTotalCost": int64(precheckResp.EstimatedTotalCost),
 				"balanceCheck":       precheckResp.BalanceCheck,
+				"clientRequestId":    requestID,
 				"runId":              submitResp.RunID,
 				"status":             submitResp.Status,
 				"acceptedAt":         int64(submitResp.AcceptedAt),
@@ -138,12 +232,15 @@ func newRunSubmitCmd(opts *rootOptions) *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&inputPath, "file", "f", "", "Input file in JSON array or JSONL format")
 	cmd.Flags().StringVar(&callbackURL, "callback-url", "", "Optional callback URL")
-	cmd.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "Optional idempotency key")
+	cmd.Flags().StringVar(&clientRequestID, "client-request-id", "", "Stable idempotency key for retrying the same rows submission")
+	cmd.Flags().StringVar(&clientRequestID, "idempotency-key", "", "Deprecated alias for --client-request-id")
+	_ = cmd.Flags().MarkDeprecated("idempotency-key", "use --client-request-id")
 	return cmd
 }
 
 func newRunWatchCmd(opts *rootOptions) *cobra.Command {
 	interval := 5 * time.Second
+	var maxWait time.Duration
 
 	cmd := &cobra.Command{
 		Use:   "watch <run-id>",
@@ -155,14 +252,22 @@ func newRunWatchCmd(opts *rootOptions) *cobra.Command {
 				return err
 			}
 
-			var latest runStatusResponse
+			watchCtx := cmd.Context()
+			if maxWait > 0 {
+				var cancel context.CancelFunc
+				watchCtx, cancel = context.WithTimeout(cmd.Context(), maxWait)
+				defer cancel()
+			}
+
+			var wrap runGetResponse
 			for {
-				ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
-				err := httpClient.GetJSON(ctx, "/v1/batch/workflow-runs/"+args[0], &latest)
+				ctx, cancel := context.WithTimeout(watchCtx, opts.timeout)
+				err := httpClient.GetJSON(ctx, "/users/me/runs/"+args[0], &wrap)
 				cancel()
 				if err != nil {
 					return err
 				}
+				latest := wrap.Run
 
 				if opts.output != "json" {
 					_, err := fmt.Fprintf(
@@ -181,25 +286,27 @@ func newRunWatchCmd(opts *rootOptions) *cobra.Command {
 				}
 
 				if isTerminalRunStatus(latest.Status) {
-					break
+					if opts.output == "json" {
+						enc := json.NewEncoder(cmd.OutOrStdout())
+						enc.SetIndent("", "  ")
+						return enc.Encode(latest)
+					}
+					return printRunSummary(cmd.OutOrStdout(), latest)
 				}
 
 				select {
-				case <-cmd.Context().Done():
-					return cmd.Context().Err()
+				case <-watchCtx.Done():
+					if maxWait <= 0 {
+						return watchCtx.Err()
+					}
+					return fmt.Errorf("timed out after %s waiting for run %s (current status: %s)", maxWait, args[0], latest.Status)
 				case <-time.After(interval):
 				}
 			}
-
-			if opts.output == "json" {
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				return enc.Encode(latest)
-			}
-			return printRunSummary(cmd.OutOrStdout(), latest)
 		},
 	}
 	cmd.Flags().DurationVar(&interval, "interval", interval, "Polling interval")
+	cmd.Flags().DurationVar(&maxWait, "max-wait", 0, "Maximum total time to wait for the run to finish; 0 means wait forever")
 	return cmd
 }
 
@@ -214,17 +321,43 @@ type runResultRowArtifact struct {
 }
 
 type runResultRow struct {
-	RowIndex  int                    `json:"rowIndex"`
-	Status    string                 `json:"status"`
-	Error     string                 `json:"error"`
-	InputJSON string                 `json:"inputJson"`
-	Artifacts []runResultRowArtifact `json:"artifacts"`
+	RowIndex     int                    `json:"rowIndex"`
+	Status       string                 `json:"status"`
+	Error        string                 `json:"error"`
+	ErrorMessage string                 `json:"errorMessage"`
+	InputJSON    string                 `json:"inputJson"`
+	Artifacts    []runResultRowArtifact `json:"artifacts"`
 }
 
 type listRunResultRowsResponse struct {
 	Rows          []runResultRow `json:"rows"`
 	NextPageToken string         `json:"nextPageToken"`
 	TotalCount    int            `json:"totalCount"`
+}
+
+func (r *listRunResultRowsResponse) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		Rows          []runResultRow `json:"rows"`
+		Items         []runResultRow `json:"items"`
+		NextPageToken string         `json:"nextPageToken"`
+		TotalCount    int            `json:"totalCount"`
+	}
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	r.Rows = parsed.Rows
+	if len(r.Rows) == 0 {
+		r.Rows = parsed.Items
+	}
+	for i := range r.Rows {
+		if r.Rows[i].Error == "" {
+			r.Rows[i].Error = r.Rows[i].ErrorMessage
+		}
+	}
+	r.NextPageToken = parsed.NextPageToken
+	r.TotalCount = parsed.TotalCount
+	return nil
 }
 
 func newRunResultRowsCmd(opts *rootOptions) *cobra.Command {
@@ -254,7 +387,7 @@ func newRunResultRowsCmd(opts *rootOptions) *cobra.Command {
 			}
 
 			var resp listRunResultRowsResponse
-			path := "/v1/batch/workflow-runs/" + strings.TrimSpace(args[0]) + "/result-rows"
+			path := "/users/me/runs/" + strings.TrimSpace(args[0]) + "/resultRows"
 			if err := httpClient.GetJSONWithQuery(ctx, path, query, &resp); err != nil {
 				return err
 			}
@@ -291,22 +424,27 @@ func newRunResultRowsCmd(opts *rootOptions) *cobra.Command {
 }
 
 func newRunResultWorkbookCmd(opts *rootOptions) *cobra.Command {
-	var outputPath string
+	var (
+		outputPath      string
+		downloadTimeout time.Duration
+	)
 
 	cmd := &cobra.Command{
 		Use:   "result-workbook <run-id>",
 		Short: "Download the server-generated workbook containing original inputs and results",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			httpClient, err := newHTTPClient(opts)
+			dlOpts := *opts
+			dlOpts.timeout = downloadTimeout
+			httpClient, err := newHTTPClient(&dlOpts)
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			ctx, cancel := context.WithTimeout(cmd.Context(), downloadTimeout)
 			defer cancel()
 
 			runID := strings.TrimSpace(args[0])
-			resp, err := httpClient.GetBinary(ctx, "/v1/batch/workflow-runs/"+runID+"/result-workbook")
+			resp, err := httpClient.GetBinary(ctx, "/users/me/runs/"+runID+"/resultWorkbook")
 			if err != nil {
 				return err
 			}
@@ -340,5 +478,6 @@ func newRunResultWorkbookCmd(opts *rootOptions) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&outputPath, "output-file", "f", "", "Output .xlsx path or target directory")
+	cmd.Flags().DurationVar(&downloadTimeout, "download-timeout", 5*time.Minute, "Timeout for the workbook download")
 	return cmd
 }

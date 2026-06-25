@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -32,15 +33,34 @@ type saveTemplateVersionResponse struct {
 	CreatedAt      flexInt64 `json:"createdAt"`
 }
 
-type downloadUserTemplateWorkbookResponse struct {
-	Filename string `json:"filename"`
-	Content  []byte `json:"content"`
-}
-
 type submitUserTemplateWorkbookResponse struct {
 	RunID      string    `json:"runId"`
 	Status     string    `json:"status"`
 	AcceptedAt flexInt64 `json:"acceptedAt"`
+}
+
+func (r *submitUserTemplateWorkbookResponse) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		RunID             string    `json:"runId"`
+		Status            string    `json:"status"`
+		AcceptedAt        flexInt64 `json:"acceptedAt"`
+		AcceptedAtUnix    flexInt64 `json:"acceptedAtUnix"`
+		AcceptedAtUnixAlt flexInt64 `json:"accepted_at_unix"`
+	}
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	r.RunID = parsed.RunID
+	r.Status = parsed.Status
+	r.AcceptedAt = parsed.AcceptedAt
+	if r.AcceptedAt == 0 {
+		r.AcceptedAt = parsed.AcceptedAtUnix
+	}
+	if r.AcceptedAt == 0 {
+		r.AcceptedAt = parsed.AcceptedAtUnixAlt
+	}
+	return nil
 }
 
 type listModelsResponse struct {
@@ -79,7 +99,12 @@ type templateSpecStep struct {
 }
 
 type templateSpecInputSchema struct {
-	Fields []templateSpecInputField `json:"fields"`
+	Fields     []templateSpecInputField `json:"fields"`
+	SampleRows []templateSpecSampleRow  `json:"sampleRows"`
+}
+
+type templateSpecSampleRow struct {
+	Values map[string]any `json:"values"`
 }
 
 type templateSpecInputField struct {
@@ -109,11 +134,15 @@ func newTemplateSpecCmd(opts *rootOptions) *cobra.Command {
 		newTemplateSpecCheckCmd(opts),
 		newTemplateSpecDocsCmd(opts),
 		newTemplateSpecModelsCmd(opts),
+		newTemplateSpecListCmd(opts),
+		newTemplateSpecGetCmd(opts),
+		newTemplateSpecVersionsCmd(opts),
 		newTemplateSpecCreateCmd(opts),
 		newTemplateSpecCreateVersionCmd(opts),
 		newTemplateSpecDownloadWorkbookCmd(opts),
 		newTemplateSpecValidateWorkbookCmd(opts),
 		newTemplateSpecSubmitWorkbookCmd(opts),
+		newTemplateSpecRunCmd(opts),
 	)
 	return cmd
 }
@@ -286,7 +315,7 @@ func newTemplateSpecModelsCmd(opts *rootOptions) *cobra.Command {
 			}
 
 			var resp listModelsResponse
-			if err := httpClient.GetJSONWithQuery(ctx, "/v1/batch/models", query, &resp); err != nil {
+			if err := httpClient.GetJSONWithQuery(ctx, "/models", query, &resp); err != nil {
 				return err
 			}
 			if opts.output == "json" {
@@ -330,7 +359,7 @@ func newTemplateSpecCreateCmd(opts *rootOptions) *cobra.Command {
 			defer cancel()
 
 			var createResp createUserTemplateResponse
-			if err := httpClient.PostJSON(ctx, "/v1/user-templates", map[string]any{
+			if err := httpClient.PostJSON(ctx, "/users/me/templates", map[string]any{
 				"name":        effectiveName,
 				"description": effectiveDescription,
 			}, &createResp); err != nil {
@@ -339,7 +368,6 @@ func newTemplateSpecCreateCmd(opts *rootOptions) *cobra.Command {
 
 			versionResp, err := saveTemplateSpecVersion(ctx, httpClient, createResp.TemplateID, raw, versionNote)
 			if err != nil {
-				_ = httpClient.PostJSON(ctx, "/v1/user-templates/"+createResp.TemplateID+":archive", map[string]any{}, nil)
 				return fmt.Errorf("save template version for %s: %w", createResp.TemplateID, err)
 			}
 
@@ -432,7 +460,7 @@ func newTemplateSpecCreateVersionCmd(opts *rootOptions) *cobra.Command {
 
 func saveTemplateSpecVersion(ctx context.Context, httpClient *client.Client, templateID string, rawSpec []byte, versionNote string) (saveTemplateVersionResponse, error) {
 	var versionResp saveTemplateVersionResponse
-	err := httpClient.PostJSON(ctx, "/v1/user-templates/"+templateID+"/versions", map[string]any{
+	err := httpClient.PostJSON(ctx, "/users/me/templates/"+templateID+"/versions", map[string]any{
 		"versionNote":   strings.TrimSpace(versionNote),
 		"canonicalSpec": json.RawMessage(rawSpec),
 	}, &versionResp)
@@ -456,11 +484,11 @@ func newTemplateSpecDownloadWorkbookCmd(opts *rootOptions) *cobra.Command {
 
 			templateID := strings.TrimSpace(args[0])
 			versionID := strings.TrimSpace(args[1])
-			var resp downloadUserTemplateWorkbookResponse
-			if err := httpClient.GetJSON(ctx, "/v1/user-templates/"+templateID+"/versions/"+versionID+"/workbook", &resp); err != nil {
+			resp, err := httpClient.GetBinary(ctx, "/users/me/templates/"+templateID+"/versions/"+versionID+"/workbook")
+			if err != nil {
 				return err
 			}
-			filename := resp.Filename
+			filename := suggestedDownloadFilename(resp.ContentDisposition)
 			if filename == "" {
 				filename = templateID + "-" + versionID + ".xlsx"
 			}
@@ -468,7 +496,7 @@ func newTemplateSpecDownloadWorkbookCmd(opts *rootOptions) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("resolve output file path: %w", err)
 			}
-			if err := os.WriteFile(targetPath, resp.Content, 0o644); err != nil {
+			if err := os.WriteFile(targetPath, resp.Body, 0o644); err != nil {
 				return fmt.Errorf("write downloaded file: %w", err)
 			}
 			result := map[string]any{
@@ -476,14 +504,14 @@ func newTemplateSpecDownloadWorkbookCmd(opts *rootOptions) *cobra.Command {
 				"versionId":  versionID,
 				"path":       targetPath,
 				"filename":   filename,
-				"size":       len(resp.Content),
+				"size":       len(resp.Body),
 			}
 			if opts.output == "json" {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(result)
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "template_id\t%s\nversion_id\t%s\npath\t%s\nsize\t%d\n", templateID, versionID, targetPath, len(resp.Content))
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "template_id\t%s\nversion_id\t%s\npath\t%s\nsize\t%d\n", templateID, versionID, targetPath, len(resp.Body))
 			return err
 		},
 	}
@@ -497,7 +525,8 @@ func newTemplateSpecValidateWorkbookCmd(opts *rootOptions) *cobra.Command {
 		Short: "Validate a filled user-template workbook",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resp, err := postUserTemplateWorkbook[validateTemplateFileResponse](cmd.Context(), opts, args[0], args[1], args[2], "/v1/batch/user-template-workbook:validate", nil)
+			endpoint := "/users/me/templates/" + strings.TrimSpace(args[0]) + "/versions/" + strings.TrimSpace(args[1]) + ":validateWorkbook"
+			resp, err := postUserTemplateWorkbook[validateTemplateFileResponse](cmd.Context(), opts, args[2], endpoint, nil)
 			if err != nil {
 				return err
 			}
@@ -524,14 +553,15 @@ func newTemplateSpecValidateWorkbookCmd(opts *rootOptions) *cobra.Command {
 
 func newTemplateSpecSubmitWorkbookCmd(opts *rootOptions) *cobra.Command {
 	var callbackURL string
-	var idempotencyKey string
+	var clientRequestID string
 
 	cmd := &cobra.Command{
 		Use:   "submit-workbook <template-id> <version-id> <xlsx-path>",
 		Short: "Submit a filled user-template workbook as a run",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			validateResp, err := postUserTemplateWorkbook[validateTemplateFileResponse](cmd.Context(), opts, args[0], args[1], args[2], "/v1/batch/user-template-workbook:validate", nil)
+			validateEndpoint := "/users/me/templates/" + strings.TrimSpace(args[0]) + "/versions/" + strings.TrimSpace(args[1]) + ":validateWorkbook"
+			validateResp, err := postUserTemplateWorkbook[validateTemplateFileResponse](cmd.Context(), opts, args[2], validateEndpoint, nil)
 			if err != nil {
 				return err
 			}
@@ -549,24 +579,27 @@ func newTemplateSpecSubmitWorkbookCmd(opts *rootOptions) *cobra.Command {
 				return templateFileValidationError(validateResp)
 			}
 
-			extra := map[string]string{}
+			crid, generatedRequestID := effectiveClientRequestID(clientRequestID)
+			extra := map[string]string{
+				"clientRequestId": crid,
+			}
 			if strings.TrimSpace(callbackURL) != "" {
 				extra["callbackUrl"] = strings.TrimSpace(callbackURL)
 			}
-			if strings.TrimSpace(idempotencyKey) != "" {
-				extra["idempotencyKey"] = strings.TrimSpace(idempotencyKey)
-			}
-			submitResp, err := postUserTemplateWorkbook[submitUserTemplateWorkbookResponse](cmd.Context(), opts, args[0], args[1], args[2], "/v1/batch/user-template-workbook:submit", extra)
+			submitEndpoint := "/users/me/templates/" + strings.TrimSpace(args[0]) + "/versions/" + strings.TrimSpace(args[1]) + ":runWorkbook"
+			printGeneratedClientRequestID(cmd, crid, generatedRequestID)
+			submitResp, err := postUserTemplateWorkbook[submitUserTemplateWorkbookResponse](cmd.Context(), opts, args[2], submitEndpoint, extra)
 			if err != nil {
 				return err
 			}
 			result := map[string]any{
-				"templateId": args[0],
-				"versionId":  args[1],
-				"file":       args[2],
-				"runId":      submitResp.RunID,
-				"status":     submitResp.Status,
-				"acceptedAt": int64(submitResp.AcceptedAt),
+				"templateId":      args[0],
+				"versionId":       args[1],
+				"file":            args[2],
+				"clientRequestId": crid,
+				"runId":           submitResp.RunID,
+				"status":          submitResp.Status,
+				"acceptedAt":      int64(submitResp.AcceptedAt),
 			}
 			if opts.output == "json" {
 				enc := json.NewEncoder(cmd.OutOrStdout())
@@ -587,7 +620,9 @@ func newTemplateSpecSubmitWorkbookCmd(opts *rootOptions) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&callbackURL, "callback-url", "", "Optional callback URL")
-	cmd.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "Optional idempotency key")
+	cmd.Flags().StringVar(&clientRequestID, "client-request-id", "", "Stable idempotency key for retrying the same workbook submission")
+	cmd.Flags().StringVar(&clientRequestID, "idempotency-key", "", "Deprecated alias for --client-request-id")
+	_ = cmd.Flags().MarkDeprecated("idempotency-key", "use --client-request-id")
 	return cmd
 }
 
@@ -617,6 +652,9 @@ func loadTemplateSpecFile(path string) (templateSpecEnvelope, []byte, error) {
 	if spec.InputSchema == nil {
 		return templateSpecEnvelope{}, nil, errors.New("TemplateSpec inputSchema is required")
 	}
+	if err := validateTemplateSpecStructure(spec); err != nil {
+		return templateSpecEnvelope{}, nil, err
+	}
 	if err := validateTemplateSpecAssetBindingContract(spec); err != nil {
 		return templateSpecEnvelope{}, nil, err
 	}
@@ -625,6 +663,28 @@ func loadTemplateSpecFile(path string) (templateSpecEnvelope, []byte, error) {
 		return templateSpecEnvelope{}, nil, fmt.Errorf("compact TemplateSpec JSON: %w", err)
 	}
 	return spec, compact.Bytes(), nil
+}
+
+var templateSpecStepIDPattern = regexp.MustCompile(`^stp_[0-9a-z]{6,10}$`)
+
+func validateTemplateSpecStructure(spec templateSpecEnvelope) error {
+	stepIDs := make(map[string]struct{}, len(spec.Steps))
+	for i, step := range spec.Steps {
+		stepID := strings.TrimSpace(step.StepID)
+		if !templateSpecStepIDPattern.MatchString(stepID) {
+			return fmt.Errorf("steps[%d].stepId %q must match stp_<6-10 base36 chars>", i, step.StepID)
+		}
+		if _, exists := stepIDs[stepID]; exists {
+			return fmt.Errorf("steps[%d].stepId %q is duplicated", i, stepID)
+		}
+		stepIDs[stepID] = struct{}{}
+	}
+	for i, row := range spec.InputSchema.SampleRows {
+		if row.Values == nil {
+			return fmt.Errorf("inputSchema.sampleRows[%d] must wrap field values in a values object", i)
+		}
+	}
+	return nil
 }
 
 func validateTemplateSpecAssetBindingContract(spec templateSpecEnvelope) error {
@@ -757,11 +817,11 @@ var templateSpecJSONKeyAliases = map[string]string{
 	"Widget":             "widget",
 }
 
-func postUserTemplateWorkbook[T any](ctx context.Context, opts *rootOptions, templateID, versionID, workbookPath, endpoint string, extra map[string]string) (T, error) {
+func postUserTemplateWorkbook[T any](ctx context.Context, opts *rootOptions, workbookPath, endpoint string, extra map[string]string) (T, error) {
 	var zero T
-	content, err := os.ReadFile(workbookPath)
+	payload, err := workbookPayload(workbookPath, extra)
 	if err != nil {
-		return zero, fmt.Errorf("read workbook: %w", err)
+		return zero, err
 	}
 	httpClient, err := newHTTPClient(opts)
 	if err != nil {
@@ -769,15 +829,6 @@ func postUserTemplateWorkbook[T any](ctx context.Context, opts *rootOptions, tem
 	}
 	requestCtx, cancel := context.WithTimeout(ctx, opts.timeout)
 	defer cancel()
-	payload := map[string]any{
-		"templateId": strings.TrimSpace(templateID),
-		"versionId":  strings.TrimSpace(versionID),
-		"content":    content,
-		"filename":   filepath.Base(workbookPath),
-	}
-	for key, value := range extra {
-		payload[key] = value
-	}
 	var out T
 	if err := httpClient.PostJSON(requestCtx, endpoint, payload, &out); err != nil {
 		return zero, err
@@ -824,4 +875,144 @@ func printTemplateSpecModels(w interface {
 		}
 	}
 	return tw.Flush()
+}
+
+func newTemplateSpecListCmd(opts *rootOptions) *cobra.Command {
+	var (
+		status     string
+		pageSize   int
+		pageOffset int
+	)
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List my private templates",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			httpClient, err := newHTTPClient(opts)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			defer cancel()
+
+			query := url.Values{}
+			if strings.TrimSpace(status) != "" {
+				query.Set("status", strings.TrimSpace(status))
+			}
+			if pageSize > 0 {
+				query.Set("pageSize", fmt.Sprintf("%d", pageSize))
+			}
+			if pageOffset > 0 {
+				query.Set("pageOffset", fmt.Sprintf("%d", pageOffset))
+			}
+
+			var resp map[string]any
+			if err := httpClient.GetProductJSONWithQuery(ctx, "/users/me/templates", query, &resp); err != nil {
+				return err
+			}
+			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+		},
+	}
+	cmd.Flags().StringVar(&status, "status", "", "Filter by template status (default: active)")
+	cmd.Flags().IntVar(&pageSize, "page-size", 0, "Page size")
+	cmd.Flags().IntVar(&pageOffset, "page-offset", 0, "Page offset")
+	return cmd
+}
+
+func newTemplateSpecGetCmd(opts *rootOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <template-id>",
+		Short: "Get one private template with its version list",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			httpClient, err := newHTTPClient(opts)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			defer cancel()
+
+			path := "/users/me/templates/" + url.PathEscape(strings.TrimSpace(args[0]))
+			var resp map[string]any
+			if err := httpClient.GetProductJSON(ctx, path, &resp); err != nil {
+				return err
+			}
+			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+		},
+	}
+}
+
+func newTemplateSpecVersionsCmd(opts *rootOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:   "versions <template-id>",
+		Short: "List versions of a private template",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			httpClient, err := newHTTPClient(opts)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			defer cancel()
+
+			path := "/users/me/templates/" + url.PathEscape(strings.TrimSpace(args[0])) + "/versions"
+			var resp map[string]any
+			if err := httpClient.GetProductJSON(ctx, path, &resp); err != nil {
+				return err
+			}
+			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+		},
+	}
+}
+
+func newTemplateSpecRunCmd(opts *rootOptions) *cobra.Command {
+	var (
+		versionID       string
+		inputFileID     string
+		clientRequestID string
+		callbackURL     string
+	)
+	cmd := &cobra.Command{
+		Use:   "run <template-id>",
+		Short: "Submit a run for a private template version",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			trimmedInputFileID := strings.TrimSpace(inputFileID)
+			if strings.HasPrefix(strings.ToLower(trimmedInputFileID), "ia_") {
+				return fmt.Errorf("--input-file-id requires the fileId returned by orchestrationInputs:upload; inputAssets:upload returns an inputAssetId (%q) that cannot be used to run a template", trimmedInputFileID)
+			}
+
+			crid, generatedRequestID := effectiveClientRequestID(clientRequestID)
+
+			httpClient, err := newHTTPClient(opts)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			defer cancel()
+
+			payload := map[string]any{
+				"versionId":       strings.TrimSpace(versionID),
+				"inputFileId":     trimmedInputFileID,
+				"clientRequestId": crid,
+			}
+			if strings.TrimSpace(callbackURL) != "" {
+				payload["callbackUrl"] = strings.TrimSpace(callbackURL)
+			}
+
+			path := "/users/me/templates/" + url.PathEscape(strings.TrimSpace(args[0])) + ":run"
+			printGeneratedClientRequestID(cmd, crid, generatedRequestID)
+			var resp map[string]any
+			if err := httpClient.PostProductJSON(ctx, path, payload, &resp); err != nil {
+				return err
+			}
+			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+		},
+	}
+	cmd.Flags().StringVar(&versionID, "version-id", "", "Template version ID to run")
+	cmd.Flags().StringVar(&inputFileID, "input-file-id", "", "Execution input fileId returned by orchestrationInputs:upload (not inputAssets:upload)")
+	cmd.Flags().StringVar(&clientRequestID, "client-request-id", "", "Idempotency key; auto-generated if omitted")
+	cmd.Flags().StringVar(&callbackURL, "callback-url", "", "Optional callback URL")
+	_ = cmd.MarkFlagRequired("version-id")
+	_ = cmd.MarkFlagRequired("input-file-id")
+	return cmd
 }
