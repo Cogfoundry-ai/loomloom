@@ -1005,6 +1005,13 @@ func newTemplateSpecRunCmd(opts *rootOptions) *cobra.Command {
 			if err := httpClient.PostProductJSON(ctx, path, payload, &resp); err != nil {
 				return err
 			}
+			opts.debugf(
+				"private template run: submitted template_id=%s version_id=%s input_file_id=%s run_id=%s",
+				strings.TrimSpace(args[0]),
+				strings.TrimSpace(versionID),
+				trimmedInputFileID,
+				stringMapValue(resp, "runId"),
+			)
 			return writeIndentedJSON(cmd.OutOrStdout(), resp)
 		},
 	}

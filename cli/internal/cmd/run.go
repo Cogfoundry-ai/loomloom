@@ -195,6 +195,7 @@ func newRunSubmitCmd(opts *rootOptions) *cobra.Command {
 			if err := httpClient.PostJSON(ctx, "/officialTemplates/"+args[0]+":runRows", payload, &submitResp); err != nil {
 				return err
 			}
+			opts.debugf("official template run: submitted template_id=%s run_id=%s row_count=%d", args[0], submitResp.RunID, len(rows))
 
 			result := map[string]any{
 				"templateId":         args[0],
@@ -460,6 +461,7 @@ func newRunResultWorkbookCmd(opts *rootOptions) *cobra.Command {
 			if err := os.WriteFile(targetPath, resp.Body, 0o644); err != nil {
 				return fmt.Errorf("write result workbook: %w", err)
 			}
+			opts.debugf("run result workbook: downloaded run_id=%s filename=%s size_bytes=%d", runID, filepath.Base(targetPath), len(resp.Body))
 
 			result := map[string]any{
 				"runId":       runID,

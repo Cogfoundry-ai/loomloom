@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,10 +14,12 @@ import (
 )
 
 type rootOptions struct {
-	server  string
-	token   string
-	timeout time.Duration
-	output  string
+	server    string
+	token     string
+	timeout   time.Duration
+	output    string
+	verbose   bool
+	logWriter io.Writer
 }
 
 func NewRootCmd() *cobra.Command {
@@ -24,6 +28,7 @@ func NewRootCmd() *cobra.Command {
 		token:   envOrDefault("LOOMLOOM_TOKEN", os.Getenv("BATCHJOB_TOKEN")),
 		timeout: 30 * time.Second,
 		output:  "text",
+		verbose: envBool("LOOMLOOM_VERBOSE"),
 	}
 
 	cmd := &cobra.Command{
@@ -33,6 +38,7 @@ func NewRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		Version:       version.Version,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			opts.logWriter = cmd.ErrOrStderr()
 			opts.output = strings.ToLower(strings.TrimSpace(opts.output))
 			if opts.output != "text" && opts.output != "json" {
 				return fmt.Errorf("unsupported output format %q; use text or json", opts.output)
@@ -48,6 +54,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&opts.token, "token", "t", opts.token, "Bearer token")
 	cmd.PersistentFlags().DurationVar(&opts.timeout, "timeout", opts.timeout, "HTTP timeout")
 	cmd.PersistentFlags().StringVarP(&opts.output, "output", "o", opts.output, "Output format: text|json")
+	cmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", opts.verbose, "Write debug logs to stderr")
 	if tokenFlag := cmd.PersistentFlags().Lookup("token"); tokenFlag != nil {
 		tokenFlag.DefValue = ""
 	}
@@ -72,9 +79,11 @@ func NewRootCmd() *cobra.Command {
 
 func newHTTPClient(opts *rootOptions) (*client.Client, error) {
 	return client.New(client.Config{
-		BaseURL: opts.server,
-		Token:   opts.token,
-		Timeout: opts.timeout,
+		BaseURL:   opts.server,
+		Token:     opts.token,
+		Timeout:   opts.timeout,
+		Verbose:   opts.verbose,
+		LogWriter: opts.logWriter,
 	})
 }
 
@@ -83,4 +92,17 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envBool(key string) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	parsed, err := strconv.ParseBool(value)
+	return err == nil && parsed
+}
+
+func (opts *rootOptions) debugf(format string, args ...any) {
+	if !opts.verbose || opts.logWriter == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(opts.logWriter, "[debug] "+format+"\n", args...)
 }

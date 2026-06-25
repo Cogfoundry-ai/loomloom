@@ -270,6 +270,7 @@ func newListingWithdrawCmd(opts *rootOptions) *cobra.Command {
 			query := url.Values{}
 			query.Set("status", "pending")
 			query.Set("pageSize", "500")
+			opts.debugf("listing withdraw: resolving pending review listing_id=%s", strings.TrimSpace(args[0]))
 			var reviews creatorReviewListResponse
 			if err := httpClient.GetProductJSONWithQuery(ctx, "/creators/me/marketReviewRequests", query, &reviews); err != nil {
 				return fmt.Errorf("list pending review requests: %w", err)
@@ -297,6 +298,7 @@ func newListingWithdrawCmd(opts *rootOptions) *cobra.Command {
 				)
 			}
 
+			opts.debugf("listing withdraw: pending review resolved review_request_id=%s", reviewIDs[0])
 			payload := map[string]any{}
 			if strings.TrimSpace(reason) != "" {
 				payload["reason"] = strings.TrimSpace(reason)
@@ -306,6 +308,7 @@ func newListingWithdrawCmd(opts *rootOptions) *cobra.Command {
 			if err := httpClient.PostProductJSON(ctx, path, payload, &resp); err != nil {
 				return fmt.Errorf("withdraw pending review request %s: %w", reviewIDs[0], err)
 			}
+			opts.debugf("listing withdraw: review withdrawn review_request_id=%s", reviewIDs[0])
 			return writeIndentedJSON(cmd.OutOrStdout(), resp)
 		},
 	}

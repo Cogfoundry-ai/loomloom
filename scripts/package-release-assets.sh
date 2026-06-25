@@ -11,7 +11,7 @@ Usage: scripts/package-release-assets.sh --version <tag> [--out-dir <path>]
 Build and package LoomLoom CLI release assets for GitHub or Gitee releases.
 
 Options:
-  --version <tag>    Version injected into the CLI binary, for example v0.2.4
+  --version <tag>    Version injected into the CLI binary, for example v0.1.0-beta.1
   --out-dir <path>   Output directory for release assets (default: release)
   --help             Show this help text
 EOF

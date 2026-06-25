@@ -246,7 +246,7 @@ func TestMarketRunRemovesIdentityFieldsAndAddsConfirm(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"run_id":"run-1"}`))
+		_, _ = w.Write([]byte(`{"runId":"run-1","runTransactionId":"transaction-1"}`))
 	}))
 	defer server.Close()
 
@@ -260,7 +260,13 @@ func TestMarketRunRemovesIdentityFieldsAndAddsConfirm(t *testing.T) {
 		"creatorUserId": 13007,
 		"taskInputs":[]
 	}`)
-	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	var logs bytes.Buffer
+	opts := &rootOptions{
+		server:    server.URL + "/loom/v1",
+		timeout:   time.Second,
+		verbose:   true,
+		logWriter: &logs,
+	}
 	cmd := newMarketRunCmd(opts)
 	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath, "--confirm"})
 
@@ -277,6 +283,9 @@ func TestMarketRunRemovesIdentityFieldsAndAddsConfirm(t *testing.T) {
 	}
 	if body["clientRequestId"] != "req-1" {
 		t.Fatalf("clientRequestId=%v want req-1", body["clientRequestId"])
+	}
+	if !strings.Contains(logs.String(), "market run: submitted listing_id=listing-1 run_id=run-1 transaction_id=transaction-1") {
+		t.Fatalf("logs=%q want market run submission identifiers", logs.String())
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -16,15 +17,19 @@ import (
 )
 
 type Config struct {
-	BaseURL string
-	Token   string
-	Timeout time.Duration
+	BaseURL   string
+	Token     string
+	Timeout   time.Duration
+	Verbose   bool
+	LogWriter io.Writer
 }
 
 type Client struct {
 	baseURL    string
 	token      string
 	httpClient *http.Client
+	verbose    bool
+	logWriter  io.Writer
 }
 
 func New(cfg Config) (*Client, error) {
@@ -36,12 +41,18 @@ func New(cfg Config) (*Client, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
+	logWriter := cfg.LogWriter
+	if logWriter == nil {
+		logWriter = io.Discard
+	}
 	return &Client{
 		baseURL: baseURL,
 		token:   strings.TrimSpace(cfg.Token),
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		verbose:   cfg.Verbose,
+		logWriter: logWriter,
 	}, nil
 }
 
@@ -74,6 +85,53 @@ func (c *Client) endpoint(path string) string {
 	return c.baseURL + path
 }
 
+func (c *Client) do(req *http.Request) (*http.Response, error) {
+	startedAt := time.Now()
+	c.logf("%s %s", req.Method, req.URL.EscapedPath())
+	resp, err := c.httpClient.Do(req)
+	duration := time.Since(startedAt).Round(time.Millisecond)
+	if err != nil {
+		c.logf("request failed method=%s path=%s duration=%s error=%s", req.Method, req.URL.EscapedPath(), duration, transportErrorKind(err))
+		return nil, err
+	}
+	requestID := responseRequestID(resp)
+	if requestID == "" {
+		c.logf("response status=%d duration=%s", resp.StatusCode, duration)
+	} else {
+		c.logf("response status=%d duration=%s request_id=%s", resp.StatusCode, duration, requestID)
+	}
+	return resp, nil
+}
+
+func (c *Client) logf(format string, args ...any) {
+	if !c.verbose {
+		return
+	}
+	_, _ = fmt.Fprintf(c.logWriter, "[debug] "+format+"\n", args...)
+}
+
+func responseRequestID(resp *http.Response) string {
+	for _, header := range []string{"X-Request-ID", "Request-ID", "X-Correlation-ID"} {
+		if value := strings.TrimSpace(resp.Header.Get(header)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func transportErrorKind(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case os.IsTimeout(err):
+		return "timeout"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	default:
+		return "network"
+	}
+}
+
 func (c *Client) GetJSON(ctx context.Context, path string, out any) error {
 	return c.GetJSONWithQuery(ctx, path, nil, out)
 }
@@ -91,7 +149,7 @@ func (c *Client) GetJSONWithQuery(ctx context.Context, path string, query url.Va
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return err
 	}
@@ -143,7 +201,7 @@ func (c *Client) postJSON(ctx context.Context, endpoint string, in any, out any)
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return err
 	}
@@ -166,7 +224,7 @@ func (c *Client) GetBinary(ctx context.Context, path string) (*BinaryResponse, e
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +278,7 @@ func (c *Client) PostMultipartFile(ctx context.Context, path string, fieldValues
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.do(req)
 	if err != nil {
 		return err
 	}

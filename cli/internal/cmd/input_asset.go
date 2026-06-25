@@ -61,6 +61,7 @@ func newInputAssetUploadCmd(opts *rootOptions) *cobra.Command {
 				Content:     payload,
 				ContentType: normalizeInputAssetContentType(path, contentType),
 			}
+			opts.debugf("input asset upload: uploading filename=%s size_bytes=%d", req.Filename, len(payload))
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
 			defer cancel()
@@ -69,6 +70,7 @@ func newInputAssetUploadCmd(opts *rootOptions) *cobra.Command {
 			if err := httpClient.PostJSON(ctx, "/inputAssets:upload", req, &resp); err != nil {
 				return err
 			}
+			opts.debugf("input asset upload: completed input_asset_id=%s", resp.InputAssetID)
 
 			if opts.output == "json" {
 				enc := json.NewEncoder(cmd.OutOrStdout())

@@ -120,6 +120,7 @@ func newArtifactDownloadCmd(opts *rootOptions) *cobra.Command {
 				if err := os.WriteFile(targetPath, data, 0o644); err != nil {
 					return err
 				}
+				opts.debugf("artifact download: completed artifact_id=%s filename=%s size_bytes=%d", artifact.ArtifactID, filepath.Base(targetPath), len(data))
 				downloads = append(downloads, map[string]any{
 					"artifactId": artifact.ArtifactID,
 					"taskId":     artifact.TaskID,

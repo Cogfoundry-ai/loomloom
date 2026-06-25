@@ -66,7 +66,7 @@ Choose the entry point by user intent:
    The LoomLoom API base URL for the CogFoundry production environment is `https://loomloom.cogfoundry.ai/loom/v1`. A CogFoundry production token may only be sent to the host `loomloom.cogfoundry.ai`, and only over HTTPS.
    Before making any request with a production token, check the scheme and host of the final target URL. If the host is not `loomloom.cogfoundry.ai`, stop immediately, do not send the token, and do not auto-follow to another domain.
    Test environments, local addresses, private deployments, or third-party proxies must use a dedicated token issued separately for that environment. Do not reuse a CogFoundry production token for those addresses. Even if the user explicitly provides another service URL, do not send the production token to it.
-   If the token is missing, guide the user to `https://console.cogfoundry.ai/api-keys` to create or get one. Do not echo a real token in replies, logs, or generated files.
+   If the token is missing, guide the user to `https://console-dev.cogfoundry.ai/api-keys` to create or get one. Do not echo a real token in replies, logs, or generated files.
 2. Do not paste large files into context. Upload raw input assets first:
    `loomloom input-asset upload <file>`
 3. Discover the official templates in the current environment:
@@ -454,7 +454,7 @@ The submitted workbook and server-side run input snapshot are the sources of tru
 
 ## Console Access
 
-The CogFoundry Console entry point is `https://console.cogfoundry.ai`. When a user needs to check run status, you can give them this Console home page.
+The CogFoundry Console entry point is `https://console-dev.cogfoundry.ai/quickstart`. When a user needs to check run status, you can give them this Console page.
 
 There is currently no URL template for a Workflow Run detail page. Do not guess or construct a detail-page link from a `runId`; if the CLI returns a URL explicitly provided by the server, use it as-is, otherwise only provide the Console home page and the CLI query commands.
 

@@ -308,6 +308,7 @@ func newTemplateDownloadCmd(opts *rootOptions) *cobra.Command {
 			if err := os.WriteFile(targetPath, resp.Body, 0o644); err != nil {
 				return fmt.Errorf("write downloaded file: %w", err)
 			}
+			opts.debugf("official template workbook: downloaded template_id=%s filename=%s size_bytes=%d", strings.TrimSpace(args[0]), filepath.Base(targetPath), len(resp.Body))
 
 			result := map[string]any{
 				"templateId": args[0],

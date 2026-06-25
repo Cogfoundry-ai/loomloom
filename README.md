@@ -58,13 +58,13 @@ curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --agent openclaw
 
 # Specific version
-curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.2.7
+curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.1.0-beta.1
 
 # Latest beta or internal channel
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta --no-brew
 
 # Specific pre-release tag
-curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.2.6-beta.9 --no-brew
+curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.1.0-beta.1 --no-brew
 ```
 
 Windows PowerShell:
@@ -83,7 +83,7 @@ irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1 | 
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Channel beta
 
 # Specific pre-release tag
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Version v0.2.6-beta.9
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Version v0.1.0-beta.1
 ```
 
 Homebrew distribution is planned, but the tap repository and the token required for publishing are not yet configured. For now, use the install script above.
@@ -101,7 +101,7 @@ export LOOMLOOM_TOKEN="<your CogFoundry token>"
 
 Add these values to `~/.zshrc`, `~/.bashrc`, or your shell profile if you do not want to set them again for every session. The CLI still accepts the legacy `BATCHJOB_SERVER` and `BATCHJOB_TOKEN` variables for compatibility, but new setups should use `LOOMLOOM_*`.
 
-Create or get a token on the [CogFoundry API Keys](https://console.cogfoundry.ai/api-keys) page. Never expose a real token in documentation, screenshots, logs, or public conversations.
+Create or get a token on the [CogFoundry API Keys](https://console-dev.cogfoundry.ai/api-keys) page. Never expose a real token in documentation, screenshots, logs, or public conversations.
 
 > Security requirement: A CogFoundry production token may only be sent to `https://loomloom.cogfoundry.ai`. The production API base URL is `https://loomloom.cogfoundry.ai/loom/v1`. Do not send a production token to any other domain, test environment, local address, or third-party proxy; when using another environment, use a dedicated token issued separately for that environment.
 
@@ -248,7 +248,7 @@ The backend also supports unified rows shaped as `steps.<step-id>.executions[]` 
 
 ## Run Status
 
-Use the [CogFoundry Console](https://console.cogfoundry.ai) to inspect run progress online.
+Use the [CogFoundry Console](https://console-dev.cogfoundry.ai/quickstart) to inspect run progress online.
 
 | Status | Meaning |
 | --- | --- |
@@ -541,13 +541,13 @@ irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/uninstall.ps1 
 
 **Where do I get a token?**
 
-Create or get a token on the [CogFoundry API Keys](https://console.cogfoundry.ai/api-keys) page, then replace the placeholder in the examples.
+Create or get a token on the [CogFoundry API Keys](https://console-dev.cogfoundry.ai/api-keys) page, then replace the placeholder in the examples.
 
 A CogFoundry production token may only be used with `https://loomloom.cogfoundry.ai`. If the target service is not this host, do not use a production token.
 
 **Where do I check run status?**
 
-Use the [CogFoundry Console](https://console.cogfoundry.ai). There is currently no URL template for a Workflow Run detail page, so do not construct run-detail links yourself.
+Use the [CogFoundry Console](https://console-dev.cogfoundry.ai/quickstart). There is currently no URL template for a Workflow Run detail page, so do not construct run-detail links yourself.
 
 **Why does `template list` return no templates?**
 
@@ -563,7 +563,7 @@ Yes. Every workflow can be run with the CLI commands above.
 
 - GitHub: [github.com/Cogfoundry-ai/loomloom](https://github.com/Cogfoundry-ai/loomloom)
 - LoomLoom API: `https://loomloom.cogfoundry.ai/loom/v1`
-- API Keys: [console.cogfoundry.ai/api-keys](https://console.cogfoundry.ai/api-keys)
-- CogFoundry Console: [console.cogfoundry.ai](https://console.cogfoundry.ai)
+- API Keys: [console-dev.cogfoundry.ai/api-keys](https://console-dev.cogfoundry.ai/api-keys)
+- CogFoundry Console: [console-dev.cogfoundry.ai/quickstart](https://console-dev.cogfoundry.ai/quickstart)
 - CogFoundry website: [cogfoundry.ai](https://cogfoundry.ai)
 - Workflow Run detail page: no fixed URL template is available yet.

@@ -58,6 +58,7 @@ func newOrchestrationInputUploadCmd(opts *rootOptions) *cobra.Command {
 				Filename: filepath.Base(path),
 				Content:  content,
 			}
+			opts.debugf("orchestration input upload: uploading filename=%s size_bytes=%d", req.Filename, len(content))
 			var resp uploadOrchestrationInputResponse
 			if err := httpClient.PostProductJSON(ctx, "/orchestrationInputs:upload", req, &resp); err != nil {
 				return err
@@ -65,6 +66,7 @@ func newOrchestrationInputUploadCmd(opts *rootOptions) *cobra.Command {
 			if strings.TrimSpace(resp.InputFileID) == "" {
 				return fmt.Errorf("orchestration input upload returned an empty inputFileId")
 			}
+			opts.debugf("orchestration input upload: completed input_file_id=%s row_count=%d", resp.InputFileID, resp.RowCount)
 
 			if opts.output == "json" {
 				enc := json.NewEncoder(cmd.OutOrStdout())

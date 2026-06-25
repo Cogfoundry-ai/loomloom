@@ -174,6 +174,12 @@ func newMarketRunCmd(opts *rootOptions) *cobra.Command {
 			if err := httpClient.PostProductJSON(ctx, path, payload, &resp); err != nil {
 				return err
 			}
+			opts.debugf(
+				"market run: submitted listing_id=%s run_id=%s transaction_id=%s",
+				strings.TrimSpace(args[0]),
+				stringMapValue(resp, "runId"),
+				stringMapValue(resp, "runTransactionId"),
+			)
 			return writeIndentedJSON(cmd.OutOrStdout(), resp)
 		},
 	}

@@ -256,6 +256,18 @@ func printGeneratedClientRequestID(cmd *cobra.Command, value string, generated b
 	}
 }
 
+func stringMapValue(values map[string]any, key string) string {
+	value, ok := values[key]
+	if !ok || value == nil {
+		return "-"
+	}
+	trimmed := strings.TrimSpace(fmt.Sprint(value))
+	if trimmed == "" {
+		return "-"
+	}
+	return trimmed
+}
+
 func formatUnix(ts int64) string {
 	if ts <= 0 {
 		return "-"

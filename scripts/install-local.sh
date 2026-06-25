@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${VERSION:-v0.2.7-local}"
+VERSION="${VERSION:-v0.1.0-local}"
 AGENT="codex"
 INSTALL_DIR="${INSTALL_DIR:-}"
 SKILL_DIR="${SKILL_DIR:-}"
@@ -16,7 +16,7 @@ Options:
   --agent <codex|claude|openclaw>   Install the matching skill pack (default: codex)
   --install-dir <path>              Directory for loomloom binary (default: current loomloom dir or ~/.local/bin)
   --skill-dir <path>                Override the destination directory for SKILL.md
-  --version <version>               Version injected into the local CLI (default: v0.2.7-local)
+  --version <version>               Version injected into the local CLI (default: v0.1.0-local)
   --help                            Show this help text
 EOF
 }

@@ -38,7 +38,13 @@ func TestOrchestrationInputUploadUsesProductAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	var logs bytes.Buffer
+	opts := &rootOptions{
+		server:    server.URL + "/loom/v1",
+		timeout:   time.Second,
+		verbose:   true,
+		logWriter: &logs,
+	}
 	cmd := newOrchestrationInputUploadCmd(opts)
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -55,6 +61,14 @@ func TestOrchestrationInputUploadUsesProductAPI(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "input_file_id\tec1015c0-5078-4409-84b5-b46ddc3e9312") {
 		t.Fatalf("unexpected output: %s", out.String())
+	}
+	for _, want := range []string{
+		"uploading filename=rows.jsonl size_bytes=19",
+		"completed input_file_id=ec1015c0-5078-4409-84b5-b46ddc3e9312 row_count=1",
+	} {
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("logs=%q want %q", logs.String(), want)
+		}
 	}
 }
 

@@ -188,6 +188,46 @@ func TestListingWithdrawResolvesPendingReviewAndPassesReason(t *testing.T) {
 	}
 }
 
+func TestListingWithdrawVerboseLogsDescribeBothSteps(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/creators/me/marketReviewRequests":
+			_, _ = w.Write([]byte(`{"items":[{"id":"review-1","listingId":"listing-1","status":"pending"}]}`))
+		case "/loom/v1/creators/me/marketReviewRequests/review-1:withdraw":
+			_, _ = w.Write([]byte(`{"id":"review-1","status":"withdrawn"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	var logs bytes.Buffer
+	opts := &rootOptions{
+		server:    server.URL + "/loom/v1",
+		timeout:   time.Second,
+		verbose:   true,
+		logWriter: &logs,
+	}
+	cmd := newListingWithdrawCmd(opts)
+	cmd.SetArgs([]string{"listing-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing withdraw command error = %v", err)
+	}
+	for _, want := range []string{
+		"resolving pending review listing_id=listing-1",
+		"pending review resolved review_request_id=review-1",
+		"review withdrawn review_request_id=review-1",
+		"GET /loom/v1/creators/me/marketReviewRequests",
+		"POST /loom/v1/creators/me/marketReviewRequests/review-1:withdraw",
+	} {
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("logs=%q want %q", logs.String(), want)
+		}
+	}
+}
+
 func TestListingWithdrawReportsListFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"temporary failure"}`, http.StatusServiceUnavailable)

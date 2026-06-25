@@ -25,7 +25,7 @@ Environment:
   GITEE_API_BASE        API base URL (default: https://gitee.com/api/v5)
 
 Options:
-  --tag <tag>        Release tag, for example v0.2.4
+  --tag <tag>        Release tag, for example v0.1.0-beta.1
   --asset-dir <path> Directory containing release assets (default: release)
   --help             Show this help text
 EOF
