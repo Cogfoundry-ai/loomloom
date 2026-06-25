@@ -61,6 +61,7 @@ Choose the entry point by user intent:
 0. Install via the GitHub install script by default. Homebrew is planned, but the tap repository and publishing token are not yet configured; do not guide the user to Homebrew until that is done. Whether to keep Gitee distribution is still undecided; do not proactively recommend Gitee distribution until the owner, repo, and install URL are confirmed.
    If the user asks for an internal/beta CLI, explicitly install a prerelease channel instead of defaulting to stable:
    `curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta --no-brew`
+   If resolving the latest version fails because the GitHub release API is rate-limited (HTTP 403), do not fall back to the Gitee mirror — it points to a different, outdated project and will install the wrong codebase. Instead, retry after a short wait, or install a specific version with `--version <tag>` (which skips the rate-limited lookup), or ask the user. Never switch the install source to Gitee.
 1. Check the environment:
    `loomloom doctor`
    The production default base URL is `https://loomloom.cogfoundry.ai/loom/v1`, but the active server is whatever the user sets in `LOOMLOOM_SERVER` / `--server`. Send the token only to that explicitly configured host, and only over HTTPS.
@@ -179,9 +180,13 @@ This rule applies to `loomloom template submit-file`, `loomloom template-spec su
 
 The execution summary must include the template or listing ID, input source, row count or task size, action, estimated cost or a clear cost note, and the prompt `Reply "confirm submit" before I start.` For `template submit-file`, `template-spec submit-workbook`, `run submit`, `template-spec run`, and `market run`, pass an explicit stable `--client-request-id` and retain it for safe retry of the identical payload.
 
+Present the confirmation summary in plain business language (what will happen, which template or SkillBot, how many tasks, the cost). Do not show the raw CLI command in the confirmation unless the user explicitly asks to see it.
+
 ## Remote State Change Confirmation Rule
 
 Before creating or changing persistent remote resources, show the exact action and ask for explicit confirmation. This applies to `template-spec create`, `template-spec create-version`, `listing publish` (including `--listing-id` version updates), `listing update`, `listing unlist`, `listing relist`, `listing withdraw`, and `creator review withdraw`.
+
+Describe the action in plain business language; "show the exact action" does not mean printing the CLI command. Do not show the raw CLI command unless the user explicitly asks to see it.
 
 Read-only commands, local checks, uploads, downloads, and quotes do not require this confirmation. A paid run still follows the stricter Submission Confirmation Rule above.
 
@@ -287,7 +292,7 @@ Creation confirmation gate:
 - "Create a PRD review template" only starts the flow; it does not confirm remote creation.
 - Environment variables, token, and server URL are configuration, not creation confirmation.
 - "Generate spec" only means generate and locally check the spec; it does not confirm running `template-spec create`.
-- Before running `template-spec create`, show template name, spec path, check result, exact creation command, and ask the user to reply `confirm create template`.
+- Before running `template-spec create`, describe in plain language what will be created (template name, what it does, the local check result) and ask the user to reply `confirm create template`. Do not show the raw CLI command unless the user explicitly asks to see it.
 
 TemplatePlan should cover template name and goal, row meaning, input fields, workflow steps, serial/parallel/summary relationships, template usage mode, user-visible outputs, failure policy, error columns, default model, and special requirements.
 
