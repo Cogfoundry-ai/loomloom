@@ -103,7 +103,7 @@ Add these values to `~/.zshrc`, `~/.bashrc`, or your shell profile if you do not
 
 Create or get a token on the [CogFoundry API Keys](https://console-dev.cogfoundry.ai/api-keys) page. Never expose a real token in documentation, screenshots, logs, or public conversations.
 
-> Security requirement: A CogFoundry production token may only be sent to `https://loomloom.cogfoundry.ai`. The production API base URL is `https://loomloom.cogfoundry.ai/loom/v1`. Do not send a production token to any other domain, test environment, local address, or third-party proxy; when using another environment, use a dedicated token issued separately for that environment.
+> Security requirement: Only send your token to the `LOOMLOOM_SERVER` URL you explicitly configured (or the `--server` value you pass), and use HTTPS. The production default base URL is `https://loomloom.cogfoundry.ai/loom/v1`. Do not send the token to a host you did not specify, and do not follow redirects that point the token at a different domain. Use a token issued for the environment you are targeting.
 
 ---
 
@@ -543,7 +543,7 @@ irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/uninstall.ps1 
 
 Create or get a token on the [CogFoundry API Keys](https://console-dev.cogfoundry.ai/api-keys) page, then replace the placeholder in the examples.
 
-A CogFoundry production token may only be used with `https://loomloom.cogfoundry.ai`. If the target service is not this host, do not use a production token.
+Use your token only with the `LOOMLOOM_SERVER` you configured. Do not send it to a host you did not explicitly set.
 
 **Where do I check run status?**
 

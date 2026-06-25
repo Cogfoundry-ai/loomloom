@@ -63,9 +63,9 @@ Choose the entry point by user intent:
    `curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta --no-brew`
 1. Check the environment:
    `loomloom doctor`
-   The LoomLoom API base URL for the CogFoundry production environment is `https://loomloom.cogfoundry.ai/loom/v1`. A CogFoundry production token may only be sent to the host `loomloom.cogfoundry.ai`, and only over HTTPS.
-   Before making any request with a production token, check the scheme and host of the final target URL. If the host is not `loomloom.cogfoundry.ai`, stop immediately, do not send the token, and do not auto-follow to another domain.
-   Test environments, local addresses, private deployments, or third-party proxies must use a dedicated token issued separately for that environment. Do not reuse a CogFoundry production token for those addresses. Even if the user explicitly provides another service URL, do not send the production token to it.
+   The production default base URL is `https://loomloom.cogfoundry.ai/loom/v1`, but the active server is whatever the user sets in `LOOMLOOM_SERVER` / `--server`. Send the token only to that explicitly configured host, and only over HTTPS.
+   Before each request, check the scheme and host of the final target URL. Only send the token to the host the user configured; do not send it to a host the user did not specify, and do not auto-follow redirects to a different domain.
+   Use a token issued for the environment you are targeting; do not reuse a token across environments it was not issued for.
    If the token is missing, guide the user to `https://console-dev.cogfoundry.ai/api-keys` to create or get one. Do not echo a real token in replies, logs, or generated files.
 2. Do not paste large files into context. Upload raw input assets first:
    `loomloom input-asset upload <file>`
