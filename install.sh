@@ -8,7 +8,7 @@ AGENT="codex"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 SKILL_DIR="${SKILL_DIR:-}"
 USE_HOMEBREW="auto"
-HOMEBREW_TAP="${LOOMLOOM_HOMEBREW_TAP:-}"
+HOMEBREW_TAP="${LOOMLOOM_HOMEBREW_TAP:-Cogfoundry-ai/tap}"
 
 usage() {
   cat <<'EOF'
