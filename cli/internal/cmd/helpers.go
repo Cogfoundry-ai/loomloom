@@ -74,26 +74,8 @@ type templateBalanceCheck struct {
 }
 
 type precheckTemplateRowsResponse struct {
-	EstimatedTotalCost flexInt64             `json:"estimatedTotalCost"`
+	EstimatedTotalCost flexInt64             `json:"estimatedTotalCostT"`
 	BalanceCheck       *templateBalanceCheck `json:"balanceCheck"`
-}
-
-func (r *precheckTemplateRowsResponse) UnmarshalJSON(data []byte) error {
-	type alias struct {
-		EstimatedTotalCost  flexInt64             `json:"estimatedTotalCost"`
-		EstimatedTotalCostT flexInt64             `json:"estimatedTotalCostT"`
-		BalanceCheck        *templateBalanceCheck `json:"balanceCheck"`
-	}
-	var parsed alias
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return err
-	}
-	r.EstimatedTotalCost = parsed.EstimatedTotalCost
-	if r.EstimatedTotalCost == 0 {
-		r.EstimatedTotalCost = parsed.EstimatedTotalCostT
-	}
-	r.BalanceCheck = parsed.BalanceCheck
-	return nil
 }
 
 type submitTemplateRowsResponse struct {
@@ -283,13 +265,21 @@ func formatDuration(startUnix int64, endUnix int64) string {
 }
 
 func formatCost(cost int64) string {
-	sign := ""
-	if cost < 0 {
-		sign = "-"
-		cost = -cost
+	return formatMoney(cost, "CNY")
+}
+
+func formatMoney(amountT int64, currency string) string {
+	currency = strings.ToUpper(strings.TrimSpace(currency))
+	if currency == "" {
+		currency = "CNY"
 	}
-	value := new(big.Rat).SetFrac(big.NewInt(cost), big.NewInt(10_000_000))
-	return sign + "¥" + value.FloatString(4)
+	sign := ""
+	if amountT < 0 {
+		sign = "-"
+		amountT = -amountT
+	}
+	value := new(big.Rat).SetFrac(big.NewInt(amountT), big.NewInt(10_000_000))
+	return currency + " " + sign + value.FloatString(4)
 }
 
 func isTerminalRunStatus(status string) bool {
@@ -339,20 +329,31 @@ func printTemplateFileValidation(w io.Writer, resp validateTemplateFileResponse)
 }
 
 func printPrecheck(w io.Writer, resp precheckTemplateRowsResponse) error {
-	if _, err := fmt.Fprintf(w, "estimated_cost\t%s\n", formatCost(int64(resp.EstimatedTotalCost))); err != nil {
+	currency := "CNY"
+	if resp.BalanceCheck != nil && strings.TrimSpace(resp.BalanceCheck.Currency) != "" {
+		currency = resp.BalanceCheck.Currency
+	}
+	tw := newTabWriter(w)
+	if _, err := fmt.Fprintf(tw, "estimated_cost\t%s\n", formatMoney(int64(resp.EstimatedTotalCost), currency)); err != nil {
 		return err
 	}
 	if resp.BalanceCheck == nil {
-		return nil
+		return tw.Flush()
 	}
-	tw := newTabWriter(w)
-	if _, err := fmt.Fprintln(tw, "currency\tavailable_balance\tsufficient"); err != nil {
+	if _, err := fmt.Fprintf(tw, "available_balance\t%s\n", formatMoney(int64(resp.BalanceCheck.AvailableBalance), currency)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(tw, "%s\t%s\t%t\n", resp.BalanceCheck.Currency, formatCost(int64(resp.BalanceCheck.AvailableBalance)), resp.BalanceCheck.IsSufficient); err != nil {
+	if _, err := fmt.Fprintf(tw, "sufficient\t%t\n", resp.BalanceCheck.IsSufficient); err != nil {
 		return err
 	}
 	return tw.Flush()
+}
+
+func precheckJSONPayload(resp precheckTemplateRowsResponse) map[string]any {
+	return map[string]any{
+		"estimatedTotalCostT": int64(resp.EstimatedTotalCost),
+		"balanceCheck":        resp.BalanceCheck,
+	}
 }
 
 func printRunSummary(w io.Writer, resp runStatusResponse) error {

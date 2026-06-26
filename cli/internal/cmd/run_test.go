@@ -63,6 +63,12 @@ func TestRunSubmitSendsFlatRowsAndClientRequestID(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("run submit command error = %v", err)
 	}
+	if !strings.Contains(out.String(), `"estimatedTotalCostT": 0`) {
+		t.Fatalf("output=%s want estimatedTotalCostT", out.String())
+	}
+	if strings.Contains(out.String(), `"estimatedTotalCost":`) {
+		t.Fatalf("output=%s must not emit estimatedTotalCost", out.String())
+	}
 	for name, body := range map[string]map[string]any{
 		"validate": validateBody,
 		"precheck": precheckBody,
@@ -122,6 +128,51 @@ func TestRunSubmitPrintsGeneratedClientRequestIDBeforeRunFailure(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "clientRequestId: loomloom-cli-") {
 		t.Fatalf("stderr=%q want generated clientRequestId before request failure", stderr.String())
+	}
+}
+
+func TestRunSubmitInsufficientBalanceUsesCurrencyFormat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/officialTemplates/text-v1/schema":
+			_, _ = w.Write([]byte(`{"templateId":"text-v1"}`))
+		case "/loom/v1/officialTemplates/text-v1:validateRows":
+			_, _ = w.Write([]byte(`{"valid":true}`))
+		case "/loom/v1/officialTemplates/text-v1:precheckRows":
+			_, _ = w.Write([]byte(`{
+				"estimatedTotalCostT":119350,
+				"balanceCheck":{
+					"currency":"CNY",
+					"availableBalance":1000,
+					"isSufficient":false
+				}
+			}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inputPath := filepath.Join(t.TempDir(), "rows.json")
+	if err := os.WriteFile(inputPath, []byte(`[{"prompt":"hello"}]`), 0o644); err != nil {
+		t.Fatalf("write rows file: %v", err)
+	}
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newRunSubmitCmd(opts)
+	cmd.SetArgs([]string{"text-v1", "--file", inputPath})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("run submit error = nil, want insufficient balance")
+	}
+	if !strings.Contains(err.Error(), "estimated_cost=CNY 0.0119") ||
+		!strings.Contains(err.Error(), "available=CNY 0.0001") {
+		t.Fatalf("error=%q want currency-aware amounts", err)
+	}
+	if strings.Contains(err.Error(), "¥") {
+		t.Fatalf("error=%q must not use legacy yen-style symbol", err)
 	}
 }
 

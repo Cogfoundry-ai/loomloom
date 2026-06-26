@@ -87,6 +87,7 @@ Choose the entry point by user intent:
    `loomloom template-spec create-version <template-id> <spec.json>`
    `loomloom template-spec download-workbook <template-id> <version-id>`
    `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx-path>`
+   `loomloom template-spec precheck-workbook <template-id> <version-id> <xlsx-path>`
    `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx-path>`
    Inspect existing private templates:
    `loomloom template-spec list`
@@ -94,7 +95,9 @@ Choose the entry point by user intent:
    `loomloom template-spec versions <template-id>`
    To run a private template version directly from flat JSONL rows, upload the rows first and pass the returned input_file_id:
    `loomloom orchestration-input upload <file.jsonl>`
+   `loomloom template-spec precheck <template-id> --version-id <version-id> --input-file-id <input_file_id>`
    `loomloom template-spec run <template-id> --version-id <version-id> --input-file-id <input_file_id>`
+   Use `precheck-workbook` before `submit-workbook`, and `precheck` before `template-spec run`, to estimate model/API cost and balance without creating a run.
    For common single-root workflows, each non-empty line may be a flat JSON object with string values. Unified rows using `steps.<step-id>.executions[]` are also supported when exact workflow step mappings are available. In either format, execution parameter values must be strings and allowed by the private template version. Never guess step IDs.
 6. If the user did not explicitly ask to create or use their own private template, use the official Excel workflow by default:
    `loomloom template download <template-id>`
@@ -164,7 +167,7 @@ Read `market show` first to understand public fields and obtain `listingVersionI
 - `loomloom creator review list`, `loomloom creator review get <review-request-id>`, `loomloom creator review withdraw <review-request-id>` — track and withdraw review requests directly.
 - `loomloom creator earnings` and `loomloom creator transactions` — review creator income and per-call settlement.
 
-All `*FeeT`, `*AmountT`, and `*PayableT` values are in API units where 10,000,000 units equal 1 currency unit.
+All `*FeeT`, `*CostT`, `*AmountT`, and `*PayableT` values are in API units where 10,000,000 units equal 1 currency unit.
 
 ## Submission Confirmation Rule
 
@@ -176,7 +179,7 @@ Treat the interaction as one of three states:
 2. `auto-run-candidate`: the user explicitly asks the agent to execute. Still do not submit. First provide an execution summary and wait for confirmation.
 3. `confirmed-to-run`: after seeing the execution summary, the user explicitly confirms. Only then may you submit.
 
-This rule applies to `loomloom template submit-file`, `loomloom template-spec submit-workbook`, `loomloom run submit`, `loomloom template-spec run`, and `loomloom market run`. For `loomloom market run`, first run `loomloom market quote` and include the returned estimate in the execution summary. Validation, downloads, schema inspection, model lookup, quoting, `doctor`, asset upload, orchestration-input upload, artifact listing, listing/usage/earnings reads, and result backfill do not start a new paid run and do not require the second confirmation.
+This rule applies to `loomloom template submit-file`, `loomloom template-spec submit-workbook`, `loomloom run submit`, `loomloom template-spec run`, and `loomloom market run`. For `loomloom market run`, first run `loomloom market quote` and include the returned estimate in the execution summary. Validation, precheck commands, downloads, schema inspection, model lookup, quoting, `doctor`, asset upload, orchestration-input upload, artifact listing, listing/usage/earnings reads, and result backfill do not start a new paid run and do not require the second confirmation.
 
 The execution summary must include the template or listing ID, input source, row count or task size, action, estimated cost or a clear cost note, and the prompt `Reply "confirm submit" before I start.` For `template submit-file`, `template-spec submit-workbook`, `run submit`, `template-spec run`, and `market run`, pass an explicit stable `--client-request-id` and retain it for safe retry of the identical payload.
 
@@ -194,7 +197,7 @@ Read-only commands, local checks, uploads, downloads, and quotes do not require 
 
 Prefer `--output json` whenever one command feeds another. Preserve exact fields:
 
-- `orchestration-input upload` → `inputFileId` → `template-spec run --input-file-id`
+- `orchestration-input upload` → `inputFileId` → `template-spec precheck --input-file-id` → `template-spec run --input-file-id`
 - run submission → `runId` → run watch/result commands
 - `listing publish` → `reviewRequestId` → creator review commands
 - `market run` → `runTransactionId` and `runId` → usage/run commands
@@ -219,7 +222,7 @@ The public CLI currently supports these command groups:
 - Inputs: `input-asset upload`, `orchestration-input upload`.
 - Discovery: `template list`, `template schema`, `model list`, `asset list`.
 - Official Excel workflow: `template download`, `template validate-file`, `template precheck-file`, `template submit-file`, `template backfill-results`.
-- Custom templates: `template-spec docs`, `template-spec check`, `template-spec models`, `template-spec create`, `template-spec create-version`, `template-spec list`, `template-spec get`, `template-spec versions`, `template-spec download-workbook`, `template-spec validate-workbook`, `template-spec submit-workbook`, `template-spec run`.
+- Custom templates: `template-spec docs`, `template-spec check`, `template-spec models`, `template-spec create`, `template-spec create-version`, `template-spec list`, `template-spec get`, `template-spec versions`, `template-spec download-workbook`, `template-spec validate-workbook`, `template-spec precheck-workbook`, `template-spec submit-workbook`, `template-spec precheck`, `template-spec run`.
 - Runs: `run submit`, `run list`, `run get`, `run watch`, `run result-rows`, `run result-workbook`.
 - Artifacts: `artifact list`, `artifact download`.
 - Market (buyer): `market list`, `market show`, `market quote`, `market run`, `usage list`, `usage get`.

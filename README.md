@@ -276,7 +276,7 @@ Monetary values such as `taskFixedFeeT` and `amountT` are in API units, where 10
 | Command | Description |
 | --- | --- |
 | `loomloom input-asset upload <file>` | Upload a reusable raw input asset (text/image) and get an `input_asset_id`. |
-| `loomloom orchestration-input upload <file.jsonl>` | Upload flat JSONL rows and get the `input_file_id` required by `template-spec run`. |
+| `loomloom orchestration-input upload <file.jsonl>` | Upload flat JSONL rows and get the `input_file_id` required by `template-spec precheck` and `template-spec run`. |
 
 ### Official templates
 
@@ -304,7 +304,9 @@ Monetary values such as `taskFixedFeeT` and `amountT` are in API units, where 10
 | `loomloom template-spec versions <template-id>` | List versions of a private template. |
 | `loomloom template-spec download-workbook <template-id> <version-id>` | Download a user-template workbook. |
 | `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx>` | Validate a user-template workbook. |
+| `loomloom template-spec precheck-workbook <template-id> <version-id> <xlsx>` | Estimate cost and balance for a user-template workbook without submitting. |
 | `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx>` | Submit a user-template workbook. |
+| `loomloom template-spec precheck <template-id> --version-id <id> --input-file-id <id>` | Estimate cost and balance for an uploaded JSONL input without submitting. |
 | `loomloom template-spec run <template-id> --version-id <id> --input-file-id <id>` | Run a private template version from an uploaded JSONL input. |
 
 ### Runs
@@ -381,9 +383,10 @@ loomloom template-spec create ./my-template.spec.json --version-note "initial ve
 # 4. Add a new version when the template changes
 loomloom template-spec create-version <template-id> ./my-template.spec.json
 
-# 5. Download, fill, validate, and submit the workbook
+# 5. Download, fill, validate, precheck, and submit the workbook
 loomloom template-spec download-workbook <template-id> <version-id> --output-file ./input.xlsx
 loomloom template-spec validate-workbook <template-id> <version-id> ./input.xlsx
+loomloom template-spec precheck-workbook <template-id> <version-id> ./input.xlsx
 loomloom template-spec submit-workbook <template-id> <version-id> ./input.xlsx
 ```
 
@@ -394,6 +397,8 @@ Notes:
 - Use `loomloom template-spec docs examples` for patterns.
 - Use `loomloom template-spec docs conversation` for agent-assisted conversational authoring.
 - Template changes require downloading a new workbook.
+- `precheck-workbook` estimates model/API cost and balance; it does not create a run.
+- Precheck text output includes `estimated_cost`, `available_balance`, and `sufficient`; JSON output uses `estimatedTotalCostT`.
 - `submit-workbook` creates a real hosted run; agents should ask for explicit confirmation before submitting.
 - `template-spec run` also creates a real hosted run and requires the same confirmation.
 
@@ -403,7 +408,10 @@ You can also run a private template version directly from flat JSONL rows, witho
 # 1. Upload the rows and capture the returned input_file_id
 loomloom orchestration-input upload ./rows.jsonl
 
-# 2. Run the version with that input
+# 2. Estimate cost and balance
+loomloom template-spec precheck <template-id> --version-id <version-id> --input-file-id <input_file_id>
+
+# 3. Run the version with that input
 loomloom template-spec run <template-id> --version-id <version-id> --input-file-id <input_file_id>
 ```
 
@@ -502,7 +510,7 @@ Notes:
 Agents should prefer `--output json` for commands whose results feed later commands. Preserve IDs exactly; never infer or transform them.
 
 ```text
-orchestration-input upload → inputFileId → template-spec run
+orchestration-input upload → inputFileId → template-spec precheck → template-spec run
 template-spec run / run submit → runId → run watch / result commands
 listing publish → reviewRequestId → creator review get/withdraw
 market run → runTransactionId and runId → usage get / run watch

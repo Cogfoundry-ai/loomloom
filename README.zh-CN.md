@@ -276,7 +276,7 @@ Orchestration input 文件是 JSONL。对于常见的单根工作流，每个非
 | 命令 | 说明 |
 | --- | --- |
 | `loomloom input-asset upload <file>` | 上传可复用的原始输入资产（文本/图片），并获得 `input_asset_id`。 |
-| `loomloom orchestration-input upload <file.jsonl>` | 上传扁平 JSONL 行，并获得 `template-spec run` 所需的 `input_file_id`。 |
+| `loomloom orchestration-input upload <file.jsonl>` | 上传扁平 JSONL 行，并获得 `template-spec precheck` 和 `template-spec run` 所需的 `input_file_id`。 |
 
 ### 官方模板
 
@@ -304,7 +304,9 @@ Orchestration input 文件是 JSONL。对于常见的单根工作流，每个非
 | `loomloom template-spec versions <template-id>` | 列出私有模板的版本。 |
 | `loomloom template-spec download-workbook <template-id> <version-id>` | 下载用户模板工作簿。 |
 | `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx>` | 验证用户模板工作簿。 |
+| `loomloom template-spec precheck-workbook <template-id> <version-id> <xlsx>` | 在不提交的情况下预估用户模板工作簿费用和余额。 |
 | `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx>` | 提交用户模板工作簿。 |
+| `loomloom template-spec precheck <template-id> --version-id <id> --input-file-id <id>` | 在不提交的情况下预估已上传 JSONL 输入的费用和余额。 |
 | `loomloom template-spec run <template-id> --version-id <id> --input-file-id <id>` | 使用已上传的 JSONL 输入运行私有模板版本。 |
 
 ### 运行
@@ -381,9 +383,10 @@ loomloom template-spec create ./my-template.spec.json --version-note "initial ve
 # 4. 模板变更时添加新版本
 loomloom template-spec create-version <template-id> ./my-template.spec.json
 
-# 5. 下载、填写、验证并提交工作簿
+# 5. 下载、填写、验证、预估并提交工作簿
 loomloom template-spec download-workbook <template-id> <version-id> --output-file ./input.xlsx
 loomloom template-spec validate-workbook <template-id> <version-id> ./input.xlsx
+loomloom template-spec precheck-workbook <template-id> <version-id> ./input.xlsx
 loomloom template-spec submit-workbook <template-id> <version-id> ./input.xlsx
 ```
 
@@ -394,6 +397,8 @@ loomloom template-spec submit-workbook <template-id> <version-id> ./input.xlsx
 - 用 `loomloom template-spec docs examples` 查看模式示例。
 - 用 `loomloom template-spec docs conversation` 查看 agent 辅助的对话式创作说明。
 - 模板变更后需要下载新的工作簿。
+- `precheck-workbook` 会预估模型/API 费用并检查余额；不会创建 run。
+- 预估文本输出包含 `estimated_cost`、`available_balance` 和 `sufficient`；JSON 输出使用 `estimatedTotalCostT`。
 - `submit-workbook` 会创建真实的托管运行；agent 提交前应请求明确确认。
 - `template-spec run` 也会创建真实的托管运行，并需要同样的确认。
 
@@ -403,7 +408,10 @@ loomloom template-spec submit-workbook <template-id> <version-id> ./input.xlsx
 # 1. 上传行数据并记录返回的 input_file_id
 loomloom orchestration-input upload ./rows.jsonl
 
-# 2. 使用该输入运行版本
+# 2. 预估费用和余额
+loomloom template-spec precheck <template-id> --version-id <version-id> --input-file-id <input_file_id>
+
+# 3. 使用该输入运行版本
 loomloom template-spec run <template-id> --version-id <version-id> --input-file-id <input_file_id>
 ```
 
@@ -502,7 +510,7 @@ loomloom creator transactions
 命令结果要喂给后续命令时，agent 应优先使用 `--output json`。请完整保留 ID，不要推断或转换。
 
 ```text
-orchestration-input upload -> inputFileId -> template-spec run
+orchestration-input upload -> inputFileId -> template-spec precheck -> template-spec run
 template-spec run / run submit -> runId -> run watch / result commands
 listing publish -> reviewRequestId -> creator review get/withdraw
 market run -> runTransactionId and runId -> usage get / run watch

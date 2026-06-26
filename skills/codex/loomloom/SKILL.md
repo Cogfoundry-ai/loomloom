@@ -87,6 +87,7 @@ Choose the entry point by user intent:
    `loomloom template-spec create-version <template-id> <spec.json>`
    `loomloom template-spec download-workbook <template-id> <version-id>`
    `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx-path>`
+   `loomloom template-spec precheck-workbook <template-id> <version-id> <xlsx-path>`
    `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx-path>`
    Inspect existing private templates:
    `loomloom template-spec list`
@@ -94,7 +95,9 @@ Choose the entry point by user intent:
    `loomloom template-spec versions <template-id>`
    To run a private template version directly from flat JSONL rows, upload the rows first and pass the returned input_file_id:
    `loomloom orchestration-input upload <file.jsonl>`
+   `loomloom template-spec precheck <template-id> --version-id <version-id> --input-file-id <input_file_id>`
    `loomloom template-spec run <template-id> --version-id <version-id> --input-file-id <input_file_id>`
+   Use `precheck-workbook` before `submit-workbook`, and `precheck` before `template-spec run`, to estimate model/API cost and balance without creating a run.
    For common single-root workflows, each non-empty line may be a flat JSON object with string values. Unified rows using `steps.<step-id>.executions[]` are also supported when exact workflow step mappings are available. In either format, execution parameter values must be strings and allowed by the private template version. Never guess step IDs.
 6. If the user did not explicitly ask to create or use their own private template, use the official Excel workflow by default:
    `loomloom template download <template-id>`
@@ -164,7 +167,7 @@ Creator role (publish and manage a SkillBot):
 - `loomloom creator review list`, `loomloom creator review get <review-request-id>`, `loomloom creator review withdraw <review-request-id>` — track and withdraw review requests.
 - `loomloom creator earnings` and `loomloom creator transactions` — creator income and per-call settlement.
 
-All `*FeeT`, `*AmountT`, and `*PayableT` values are in API units where 10,000,000 units equal 1 currency unit.
+All `*FeeT`, `*CostT`, `*AmountT`, and `*PayableT` values are in API units where 10,000,000 units equal 1 currency unit.
 
 ## Submission Confirmation Rule
 
@@ -194,7 +197,7 @@ This rule applies to:
 
 For `loomloom market run`, first run `loomloom market quote` and include the returned estimate in the execution summary.
 
-Validation, downloads, schema inspection, model lookup, quoting, `doctor`, asset upload, orchestration-input upload, artifact listing, listing/usage/earnings reads, and result backfill do not start a new paid run and do not require the second confirmation.
+Validation, precheck commands, downloads, schema inspection, model lookup, quoting, `doctor`, asset upload, orchestration-input upload, artifact listing, listing/usage/earnings reads, and result backfill do not start a new paid run and do not require the second confirmation.
 
 The execution summary must include:
 
@@ -228,7 +231,7 @@ Read-only commands, local checks, uploads, downloads, and quotes do not require 
 
 Prefer `--output json` whenever one command feeds another. Extract and preserve exact fields:
 
-- `orchestration-input upload` → `inputFileId` → `template-spec run --input-file-id`
+- `orchestration-input upload` → `inputFileId` → `template-spec precheck --input-file-id` → `template-spec run --input-file-id`
 - run submission → `runId` → `run watch`, `run result-rows`, or `run result-workbook`
 - `listing publish` → `reviewRequestId` → creator review commands
 - `market run` → `runTransactionId` and `runId` → `usage get` and run commands
@@ -269,7 +272,9 @@ The public CLI currently supports:
 - `loomloom template-spec versions <template-id>`
 - `loomloom template-spec download-workbook <template-id> <version-id>`
 - `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx-path>`
+- `loomloom template-spec precheck-workbook <template-id> <version-id> <xlsx-path>`
 - `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx-path>`
+- `loomloom template-spec precheck <template-id> --version-id <version-id> --input-file-id <input_file_id>`
 - `loomloom template-spec run <template-id> --version-id <version-id> --input-file-id <input_file_id>`
 - `loomloom run submit <template-id> -f rows.jsonl`
 - `loomloom run list`

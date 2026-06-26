@@ -141,7 +141,9 @@ func newTemplateSpecCmd(opts *rootOptions) *cobra.Command {
 		newTemplateSpecCreateVersionCmd(opts),
 		newTemplateSpecDownloadWorkbookCmd(opts),
 		newTemplateSpecValidateWorkbookCmd(opts),
+		newTemplateSpecPrecheckWorkbookCmd(opts),
 		newTemplateSpecSubmitWorkbookCmd(opts),
+		newTemplateSpecPrecheckCmd(opts),
 		newTemplateSpecRunCmd(opts),
 	)
 	return cmd
@@ -547,6 +549,34 @@ func newTemplateSpecValidateWorkbookCmd(opts *rootOptions) *cobra.Command {
 				return templateFileValidationError(resp)
 			}
 			return nil
+		},
+	}
+}
+
+func newTemplateSpecPrecheckWorkbookCmd(opts *rootOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:   "precheck-workbook <template-id> <version-id> <xlsx-path>",
+		Short: "Estimate cost for a user-template workbook without submitting",
+		Args:  cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			templateID := strings.TrimSpace(args[0])
+			versionID := strings.TrimSpace(args[1])
+			endpoint := "/users/me/templates/" + url.PathEscape(templateID) + "/versions/" + url.PathEscape(versionID) + ":precheckWorkbook"
+			resp, err := postUserTemplateWorkbook[precheckTemplateRowsResponse](cmd.Context(), opts, args[2], endpoint, nil)
+			if err != nil {
+				return err
+			}
+			if opts.output == "json" {
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(map[string]any{
+					"templateId": templateID,
+					"versionId":  versionID,
+					"file":       args[2],
+					"precheck":   precheckJSONPayload(resp),
+				})
+			}
+			return printPrecheck(cmd.OutOrStdout(), resp)
 		},
 	}
 }
@@ -964,6 +994,60 @@ func newTemplateSpecVersionsCmd(opts *rootOptions) *cobra.Command {
 	}
 }
 
+func newTemplateSpecPrecheckCmd(opts *rootOptions) *cobra.Command {
+	var (
+		versionID   string
+		inputFileID string
+	)
+	cmd := &cobra.Command{
+		Use:   "precheck <template-id>",
+		Short: "Estimate cost for a private template JSONL input without submitting",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			trimmedInputFileID, err := normalizeTemplateSpecInputFileID(inputFileID)
+			if err != nil {
+				return err
+			}
+
+			httpClient, err := newHTTPClient(opts)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), opts.timeout)
+			defer cancel()
+
+			templateID := strings.TrimSpace(args[0])
+			trimmedVersionID := strings.TrimSpace(versionID)
+			payload := map[string]any{
+				"versionId":   trimmedVersionID,
+				"inputFileId": trimmedInputFileID,
+			}
+
+			path := "/users/me/templates/" + url.PathEscape(templateID) + ":precheck"
+			var resp precheckTemplateRowsResponse
+			if err := httpClient.PostProductJSON(ctx, path, payload, &resp); err != nil {
+				return err
+			}
+			if opts.output == "json" {
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(map[string]any{
+					"templateId":  templateID,
+					"versionId":   trimmedVersionID,
+					"inputFileId": trimmedInputFileID,
+					"precheck":    precheckJSONPayload(resp),
+				})
+			}
+			return printPrecheck(cmd.OutOrStdout(), resp)
+		},
+	}
+	cmd.Flags().StringVar(&versionID, "version-id", "", "Template version ID to precheck")
+	cmd.Flags().StringVar(&inputFileID, "input-file-id", "", "Execution input fileId returned by orchestrationInputs:upload (not inputAssets:upload)")
+	_ = cmd.MarkFlagRequired("version-id")
+	_ = cmd.MarkFlagRequired("input-file-id")
+	return cmd
+}
+
 func newTemplateSpecRunCmd(opts *rootOptions) *cobra.Command {
 	var (
 		versionID       string
@@ -976,9 +1060,9 @@ func newTemplateSpecRunCmd(opts *rootOptions) *cobra.Command {
 		Short: "Submit a run for a private template version",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			trimmedInputFileID := strings.TrimSpace(inputFileID)
-			if strings.HasPrefix(strings.ToLower(trimmedInputFileID), "ia_") {
-				return fmt.Errorf("--input-file-id requires the fileId returned by orchestrationInputs:upload; inputAssets:upload returns an inputAssetId (%q) that cannot be used to run a template", trimmedInputFileID)
+			trimmedInputFileID, err := normalizeTemplateSpecInputFileID(inputFileID)
+			if err != nil {
+				return err
 			}
 
 			crid, generatedRequestID := effectiveClientRequestID(clientRequestID)
@@ -1022,4 +1106,12 @@ func newTemplateSpecRunCmd(opts *rootOptions) *cobra.Command {
 	_ = cmd.MarkFlagRequired("version-id")
 	_ = cmd.MarkFlagRequired("input-file-id")
 	return cmd
+}
+
+func normalizeTemplateSpecInputFileID(inputFileID string) (string, error) {
+	trimmedInputFileID := strings.TrimSpace(inputFileID)
+	if strings.HasPrefix(strings.ToLower(trimmedInputFileID), "ia_") {
+		return "", fmt.Errorf("--input-file-id requires the fileId returned by orchestrationInputs:upload; inputAssets:upload returns an inputAssetId (%q) that cannot be used to run a template", trimmedInputFileID)
+	}
+	return trimmedInputFileID, nil
 }

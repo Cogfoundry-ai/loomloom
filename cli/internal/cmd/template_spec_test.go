@@ -561,6 +561,157 @@ func TestTemplateSpecSubmitWorkbookPrintsGeneratedClientRequestID(t *testing.T) 
 	}
 }
 
+func TestTemplateSpecPrecheckUsesProductAPI(t *testing.T) {
+	var request map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loom/v1/users/me/templates/tmpl_123:precheck" {
+			t.Fatalf("path=%q want private template precheck endpoint", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"estimatedTotalCostT":119350,
+			"balanceCheck":{
+				"currency":"CNY",
+				"availableBalance":999262000,
+				"isSufficient":true
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newTemplateSpecPrecheckCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{
+		"tmpl_123",
+		"--version-id", "ver_123",
+		"--input-file-id", "ec1015c0-5078-4409-84b5-b46ddc3e9312",
+	})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("template-spec precheck command error = %v", err)
+	}
+	if request["versionId"] != "ver_123" {
+		t.Fatalf("versionId=%v want ver_123", request["versionId"])
+	}
+	if request["inputFileId"] != "ec1015c0-5078-4409-84b5-b46ddc3e9312" {
+		t.Fatalf("inputFileId=%v want uploaded input file id", request["inputFileId"])
+	}
+	for _, want := range []string{
+		"estimated_cost",
+		"CNY 0.0119",
+		"available_balance",
+		"CNY 99.9262",
+		"sufficient",
+		"true",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%q want %q", out.String(), want)
+		}
+	}
+}
+
+func TestTemplateSpecPrecheckJSONKeepsEstimatedTotalCostT(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loom/v1/users/me/templates/tmpl_123:precheck" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"estimatedTotalCostT":119350,"balanceCheck":{"currency":"CNY","availableBalance":999262000,"isSufficient":true}}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second, output: "json"}
+	cmd := newTemplateSpecPrecheckCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{
+		"tmpl_123",
+		"--version-id", "ver_123",
+		"--input-file-id", "input-file-1",
+	})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("template-spec precheck command error = %v", err)
+	}
+	if !strings.Contains(out.String(), `"estimatedTotalCostT": 119350`) {
+		t.Fatalf("output=%s want estimatedTotalCostT", out.String())
+	}
+	if strings.Contains(out.String(), `"estimatedTotalCost":`) {
+		t.Fatalf("output=%s must not emit estimatedTotalCost", out.String())
+	}
+}
+
+func TestTemplateSpecPrecheckRejectsInputAssetID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("server should not be called with an inputAssetId")
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newTemplateSpecPrecheckCmd(opts)
+	cmd.SetArgs([]string{
+		"tmpl_123",
+		"--version-id", "ver_123",
+		"--input-file-id", "ia_example",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("template-spec precheck error = nil, want inputAssetId rejection")
+	}
+	if !strings.Contains(err.Error(), "orchestrationInputs:upload") ||
+		!strings.Contains(err.Error(), "inputAssets:upload") {
+		t.Fatalf("error=%q want upload endpoint guidance", err)
+	}
+}
+
+func TestTemplateSpecPrecheckWorkbookUsesProductAPI(t *testing.T) {
+	workbookPath := filepath.Join(t.TempDir(), "custom-input.xlsx")
+	if err := os.WriteFile(workbookPath, []byte("xlsx bytes"), 0o644); err != nil {
+		t.Fatalf("write workbook: %v", err)
+	}
+
+	var request struct {
+		Filename string `json:"filename"`
+		Content  []byte `json:"content"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loom/v1/users/me/templates/tmpl_123/versions/ver_123:precheckWorkbook" {
+			t.Fatalf("path=%q want private template workbook precheck endpoint", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"estimatedTotalCostT":119350,"balanceCheck":{"currency":"CNY","availableBalance":999262000,"isSufficient":true}}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newTemplateSpecPrecheckWorkbookCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"tmpl_123", "ver_123", workbookPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("template-spec precheck-workbook command error = %v", err)
+	}
+	if request.Filename != "custom-input.xlsx" {
+		t.Fatalf("filename=%q want custom-input.xlsx", request.Filename)
+	}
+	if !bytes.Equal(request.Content, []byte("xlsx bytes")) {
+		t.Fatalf("content=%q want workbook bytes", string(request.Content))
+	}
+	if !strings.Contains(out.String(), "estimated_cost") || !strings.Contains(out.String(), "CNY 0.0119") {
+		t.Fatalf("output=%q want formatted estimated cost", out.String())
+	}
+}
+
 func TestTemplateSpecRunPrintsGeneratedClientRequestIDBeforeRequestFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/loom/v1/users/me/templates/tmpl_123:run" {
