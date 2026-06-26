@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/package-release-assets.sh --version <tag> [--out-dir <path>]
 
-Build and package LoomLoom CLI release assets for GitHub or Gitee releases.
+Build and package LoomLoom CLI release assets.
 
 Options:
   --version <tag>    Version injected into the CLI binary, for example v0.1.0-beta.1
@@ -141,7 +141,7 @@ done < <(find "$dist_dir" -type f -name 'loomloom-*' | sort)
 echo "packaging skills"
 tar -C "$repo_root" -czf "$out_dir/loomloom-skills.tar.gz" skills
 zip_file "$out_dir/loomloom-skills.zip" "$repo_root" skills
-cp "$repo_root"/install.sh "$repo_root"/install-gitee.sh "$repo_root"/install.ps1 \
+cp "$repo_root"/install.sh "$repo_root"/install.ps1 \
   "$repo_root"/uninstall.sh "$repo_root"/uninstall.ps1 \
   "$repo_root"/manifest.json "$repo_root"/README.md "$out_dir"/
 

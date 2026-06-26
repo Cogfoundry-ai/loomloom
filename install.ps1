@@ -4,22 +4,16 @@ param(
   [string]$SkillDir = "",
   [string]$Version = "latest",
   [ValidateSet("stable", "beta", "rc", "internal")]
-  [string]$Channel = "stable",
-  [ValidateSet("github", "gitee")]
-  [string]$Source = "github"
+  [string]$Channel = "stable"
 )
 
 $ErrorActionPreference = "Stop"
 
 $GithubRepo = "Cogfoundry-ai/loomloom"
-$GiteeRepo = if ($env:GITEE_REPO) { $env:GITEE_REPO } else { "shengsuanyun/loomloom" }
-$Repo = if ($Source -eq "gitee") { $GiteeRepo } else { $GithubRepo }
-$ApiBase = if ($Source -eq "gitee") { "https://gitee.com/api/v5/repos/$Repo" } else { "https://api.github.com/repos/$Repo" }
+$Repo = $GithubRepo
+$ApiBase = "https://api.github.com/repos/$Repo"
 
 function Get-ReleaseHeaders {
-  if ($Source -eq "gitee") {
-    return @{ Accept = "application/json"; "User-Agent" = "loomloom-installer" }
-  }
   return @{ Accept = "application/vnd.github+json"; "User-Agent" = "loomloom-installer" }
 }
 
@@ -84,7 +78,7 @@ $tag = Resolve-Tag -Requested $Version -ChannelName $Channel
 $cliAsset = "loomloom-windows-$arch.zip"
 $skillsAsset = "loomloom-skills.zip"
 $checksumsAsset = "checksums.txt"
-$baseUrl = if ($Source -eq "gitee") { "https://gitee.com/$Repo/releases/download/$tag" } else { "https://github.com/$Repo/releases/download/$tag" }
+$baseUrl = "https://github.com/$Repo/releases/download/$tag"
 
 $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("LoomLoom-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tmpDir | Out-Null
@@ -95,7 +89,6 @@ try {
 
   Write-Host "LoomLoom installer"
   Write-Host "repo: $Repo"
-  Write-Host "source: $Source"
   Write-Host "version: $tag"
   Write-Host "channel: $Channel"
   Write-Host "agent: $Agent"

@@ -88,8 +88,6 @@ irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1 | 
 
 Homebrew distribution is planned, but the tap repository and the token required for publishing are not yet configured. For now, use the install script above.
 
-Whether to keep Gitee distribution is still undecided. Until the owner, repo, and install URL are confirmed, do not use or share the Gitee install commands.
-
 ---
 
 ## Configure Credentials

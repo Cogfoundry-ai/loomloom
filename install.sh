@@ -2,8 +2,6 @@
 set -euo pipefail
 
 GITHUB_REPO="Cogfoundry-ai/loomloom"
-GITEE_REPO="${GITEE_REPO:-shengsuanyun/loomloom}"
-RELEASE_SOURCE="${LOOMLOOM_RELEASE_SOURCE:-github}"
 VERSION="${VERSION:-latest}"
 CHANNEL="${CHANNEL:-stable}"
 AGENT="codex"
@@ -23,7 +21,6 @@ Options:
   --version <tag|latest>   Release tag to install (default: latest)
   --channel <stable|beta|rc|internal>
                             Release channel to resolve when --version is latest (default: stable)
-  --source <github|gitee>  Release source for binary and skill assets (default: github)
   --no-brew                Force GitHub Release install even if Homebrew is available
   --help                   Show this help text
 EOF
@@ -49,10 +46,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --channel)
       CHANNEL="${2:-stable}"
-      shift 2
-      ;;
-    --source)
-      RELEASE_SOURCE="${2:-github}"
       shift 2
       ;;
     --no-brew)
@@ -85,14 +78,6 @@ case "$CHANNEL" in
   stable|beta|rc|internal) ;;
   *)
     echo "unsupported release channel: $CHANNEL" >&2
-    exit 1
-    ;;
-esac
-
-case "$RELEASE_SOURCE" in
-  github|gitee) ;;
-  *)
-    echo "unsupported release source: $RELEASE_SOURCE" >&2
     exit 1
     ;;
 esac
@@ -133,10 +118,6 @@ resolve_tag() {
     printf '%s\n' "$VERSION"
     return
   fi
-  if [[ "$RELEASE_SOURCE" == "gitee" && "$CHANNEL" == "stable" ]]; then
-    resolve_stable_tag
-    return
-  fi
   if [[ "$CHANNEL" != "stable" ]]; then
     resolve_prerelease_tag "$CHANNEL"
     return
@@ -162,22 +143,6 @@ release_list_tags() {
     | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p'
 }
 
-resolve_stable_tag() {
-  local api_url
-  api_url="$(release_api_list_url)"
-  local tag
-  tag="$(
-    release_list_tags \
-      | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-      | head -n1
-  )"
-  if [[ -z "$tag" ]]; then
-    echo "failed to resolve latest stable release tag from $api_url" >&2
-    exit 1
-  fi
-  printf '%s\n' "$tag"
-}
-
 resolve_prerelease_tag() {
   local channel="$1"
   local api_url
@@ -197,7 +162,6 @@ resolve_prerelease_tag() {
 
 can_use_homebrew() {
   [[ "$USE_HOMEBREW" != "never" ]] || return 1
-  [[ "$RELEASE_SOURCE" == "github" ]] || return 1
   [[ "$VERSION" == "latest" ]] || return 1
   [[ "$CHANNEL" == "stable" ]] || return 1
   [[ -n "$HOMEBREW_TAP" ]] || return 1
@@ -209,32 +173,20 @@ can_use_homebrew() {
 }
 
 release_repo() {
-  case "$RELEASE_SOURCE" in
-    github) printf '%s\n' "$GITHUB_REPO" ;;
-    gitee) printf '%s\n' "$GITEE_REPO" ;;
-  esac
+  printf '%s\n' "$GITHUB_REPO"
 }
 
 release_api_latest_url() {
-  case "$RELEASE_SOURCE" in
-    github) printf 'https://api.github.com/repos/%s/releases/latest\n' "$GITHUB_REPO" ;;
-    gitee) printf 'https://gitee.com/api/v5/repos/%s/releases/latest\n' "$GITEE_REPO" ;;
-  esac
+  printf 'https://api.github.com/repos/%s/releases/latest\n' "$GITHUB_REPO"
 }
 
 release_api_list_url() {
-  case "$RELEASE_SOURCE" in
-    github) printf 'https://api.github.com/repos/%s/releases?per_page=100\n' "$GITHUB_REPO" ;;
-    gitee) printf 'https://gitee.com/api/v5/repos/%s/releases?per_page=100&direction=desc\n' "$GITEE_REPO" ;;
-  esac
+  printf 'https://api.github.com/repos/%s/releases?per_page=100\n' "$GITHUB_REPO"
 }
 
 release_download_base_url() {
   local tag="$1"
-  case "$RELEASE_SOURCE" in
-    github) printf 'https://github.com/%s/releases/download/%s\n' "$GITHUB_REPO" "$tag" ;;
-    gitee) printf 'https://gitee.com/%s/releases/download/%s\n' "$GITEE_REPO" "$tag" ;;
-  esac
+  printf 'https://github.com/%s/releases/download/%s\n' "$GITHUB_REPO" "$tag"
 }
 
 checksum_tool() {
@@ -284,7 +236,6 @@ fi
 
 echo "LoomLoom installer"
 echo "repo: $(release_repo)"
-echo "source: $RELEASE_SOURCE"
 echo "version: $TAG"
 echo "channel: $CHANNEL"
 echo "agent: $AGENT"
