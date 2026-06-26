@@ -1,3 +1,5 @@
+English | [简体中文](README.zh-CN.md)
+
 # LoomLoom
 
 > **Batch content generation platform** - Use natural language to orchestrate AI workflows for copy, image, and video generation.
