@@ -28,19 +28,37 @@ function Resolve-SkillDir {
   }
 }
 
+function Get-RemoteTags {
+  # Prefer the git protocol (not subject to the GitHub REST API rate limit).
+  if (Get-Command git -ErrorAction SilentlyContinue) {
+    $lines = (& git ls-remote --tags --refs "https://github.com/$Repo.git" 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $lines) {
+      $tags = $lines | ForEach-Object { ($_ -split 'refs/tags/')[-1] } | Where-Object { $_ }
+      if ($tags) { return $tags }
+    }
+  }
+  # Fallback to the REST API if git is unavailable.
+  $releases = Invoke-RestMethod -Uri "$ApiBase/releases?per_page=100" -Headers (Get-ReleaseHeaders)
+  return @($releases | ForEach-Object { [string]$_.tag_name } | Where-Object { $_ })
+}
+
 function Resolve-Tag {
   param([string]$Requested, [string]$ChannelName)
   if ($Requested -ne "latest") { return $Requested }
+  $tags = Get-RemoteTags
   if ($ChannelName -ne "stable") {
-    $releases = Invoke-RestMethod -Uri "$ApiBase/releases?per_page=100" -Headers (Get-ReleaseHeaders)
     $pattern = "^v[0-9]+\.[0-9]+\.[0-9]+-$ChannelName\.[0-9]+$"
-    $release = @($releases | Where-Object { $_.prerelease -and $_.tag_name -match $pattern } | Select-Object -First 1)
-    if (-not $release -or -not $release[0].tag_name) { throw "failed to resolve latest $ChannelName release tag" }
-    return [string]$release[0].tag_name
+    $tag = $tags | Where-Object { $_ -match $pattern } |
+      Sort-Object @{Expression = { [version](($_ -replace '^v', '') -replace '-.*$', '') } }, @{Expression = { [int](($_ -split '\.')[-1]) } } |
+      Select-Object -Last 1
+    if (-not $tag) { throw "failed to resolve latest $ChannelName release tag" }
+    return [string]$tag
   }
-  $resp = Invoke-RestMethod -Uri "$ApiBase/releases/latest" -Headers (Get-ReleaseHeaders)
-  if (-not $resp.tag_name) { throw "failed to resolve latest release tag" }
-  return [string]$resp.tag_name
+  $tag = $tags | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } |
+    Sort-Object { [version]($_ -replace '^v', '') } |
+    Select-Object -Last 1
+  if (-not $tag) { throw "failed to resolve latest release tag" }
+  return [string]$tag
 }
 
 function Get-ChecksumMap {

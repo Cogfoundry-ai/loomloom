@@ -122,22 +122,32 @@ resolve_tag() {
     resolve_prerelease_tag "$CHANNEL"
     return
   fi
-  local api_url
-  api_url="$(release_api_latest_url)"
   local tag
   tag="$(
-    curl -fsSL "$api_url" \
-      | sed -n 's/^[[:space:]]*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
-      | head -n1
+    release_list_tags \
+      | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+      | sort -V \
+      | tail -n1
   )"
   if [[ -z "$tag" ]]; then
-    echo "failed to resolve latest release tag from $api_url" >&2
+    echo "failed to resolve latest stable release tag" >&2
     exit 1
   fi
   printf '%s\n' "$tag"
 }
 
 release_list_tags() {
+  # Prefer the git protocol (not subject to the GitHub REST API rate limit).
+  if command -v git >/dev/null 2>&1; then
+    local tags
+    tags="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPO}.git" 2>/dev/null \
+      | sed -n 's#.*refs/tags/##p')"
+    if [[ -n "$tags" ]]; then
+      printf '%s\n' "$tags"
+      return
+    fi
+  fi
+  # Fallback to the REST API if git is unavailable.
   curl -fsSL "$(release_api_list_url)" \
     | tr '{' '\n' \
     | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p'
@@ -145,16 +155,15 @@ release_list_tags() {
 
 resolve_prerelease_tag() {
   local channel="$1"
-  local api_url
-  api_url="$(release_api_list_url)"
   local tag
   tag="$(
     release_list_tags \
       | grep -E "^v[0-9]+\\.[0-9]+\\.[0-9]+-${channel}\\.[0-9]+$" \
-      | head -n1
+      | sort -V \
+      | tail -n1
   )"
   if [[ -z "$tag" ]]; then
-    echo "failed to resolve latest $channel release tag from $api_url" >&2
+    echo "failed to resolve latest $channel release tag" >&2
     exit 1
   fi
   printf '%s\n' "$tag"
@@ -174,10 +183,6 @@ can_use_homebrew() {
 
 release_repo() {
   printf '%s\n' "$GITHUB_REPO"
-}
-
-release_api_latest_url() {
-  printf 'https://api.github.com/repos/%s/releases/latest\n' "$GITHUB_REPO"
 }
 
 release_api_list_url() {
