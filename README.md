@@ -63,10 +63,10 @@ curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.1.0-beta.1
 
 # Latest beta or internal channel
-curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta --no-brew
+curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta
 
 # Specific pre-release tag
-curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.1.0-beta.1 --no-brew
+curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.1.0-beta.1
 ```
 
 Windows PowerShell:

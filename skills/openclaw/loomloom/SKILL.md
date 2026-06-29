@@ -58,9 +58,9 @@ Choose the entry point by user intent:
 
 ## Command Flow
 
-0. Install via the GitHub install script by default. Homebrew is planned, but the tap repository and publishing token are not yet configured; do not guide the user to Homebrew until that is done.
+0. Install via the GitHub install script by default. On macOS/Linux the default install uses Homebrew. Unless the user explicitly asks not to use Homebrew, do not add `--no-brew`.
    If the user asks for an internal/beta CLI, explicitly install a prerelease channel instead of defaulting to stable:
-   `curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta --no-brew`
+   `curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --channel beta`
    If resolving the latest version fails because the GitHub release API is rate-limited (HTTP 403), retry after a short wait, install a specific version with `--version <tag>` (which skips the rate-limited lookup), or ask the user.
 1. Check the environment:
    `loomloom doctor`
