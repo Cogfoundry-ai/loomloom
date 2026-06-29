@@ -41,7 +41,7 @@ Send a message like this to Codex, Claude Code, or OpenClaw. Replace `your-token
 
 ```text
 Install LoomLoom from this GitHub repository: https://github.com/Cogfoundry-ai/loomloom
-My server URL is https://loomloom.cogfoundry.ai/loom/v1, and my token is your-token.
+My server URL is https://loomloom.cogfoundry.ai/loom/v1, and my token is your-token
 After installation, run doctor to check whether the setup is healthy.
 ```
 
