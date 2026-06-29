@@ -224,6 +224,48 @@ func TestRunResultRowsCmdUsesSnapshotResultEndpoint(t *testing.T) {
 	}
 }
 
+func TestRunResultRowsTextRedactsSignedAccessURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"items": [
+				{
+					"rowIndex": 0,
+					"status": "completed",
+					"artifacts": [{
+						"artifactId":"art_1",
+						"mimeType":"application/pdf",
+						"accessUrl":"https://signed.example/result.pdf?token=secret"
+					}]
+				}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{
+		server:  server.URL + "/loom/v1",
+		timeout: time.Second,
+		output:  "text",
+	}
+	cmd := newRunResultRowsCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"run_123"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("result-rows command error = %v", err)
+	}
+	if !strings.Contains(out.String(), "download_url_available") {
+		t.Fatalf("output=%s want download_url_available marker", out.String())
+	}
+	for _, forbidden := range []string{"signed.example", "token=secret"} {
+		if strings.Contains(out.String(), forbidden) {
+			t.Fatalf("output=%s must not contain signed access URL fragment %q", out.String(), forbidden)
+		}
+	}
+}
+
 func TestRunResultWorkbookCmdDownloadsServerWorkbook(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/loom/v1/users/me/runs/run_123/resultWorkbook" {

@@ -118,12 +118,38 @@ func TestMarketListRejectsLimitAndPageSizeTogether(t *testing.T) {
 	}
 }
 
+func TestMarketListJSONPreservesUnknownFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"items":[{"id":"listing-1","displayName":"Writer","newBackendField":"kept"}],
+			"nextPageToken":"next",
+			"serverTraceId":"trace-1"
+		}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second, output: "json"}
+	cmd := newMarketListCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market list command error = %v", err)
+	}
+	for _, want := range []string{`"serverTraceId": "trace-1"`, `"newBackendField": "kept"`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
 func TestMarketShowUsesDetailEndpoint(t *testing.T) {
 	var requestedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestedPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"listing-1"}`))
+		_, _ = w.Write([]byte(marketListingDetailBody(t)))
 	}))
 	defer server.Close()
 
@@ -139,7 +165,58 @@ func TestMarketShowUsesDetailEndpoint(t *testing.T) {
 	if requestedPath != "/loom/v1/marketListings/listing-1" {
 		t.Fatalf("path=%q want detail endpoint", requestedPath)
 	}
-	if !strings.Contains(out.String(), `"id": "listing-1"`) {
+	for _, want := range []string{"listing-1", "fields:", "Prompt", "prompt", "sample_rows:"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestMarketShowJSONPreservesUnknownFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id":"listing-1",
+			"displayName":"Writer",
+			"inputSchemaSnapshot":"{}",
+			"newBackendField":{"nested":true}
+		}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second, output: "json"}
+	cmd := newMarketShowCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market show command error = %v", err)
+	}
+	for _, want := range []string{`"newBackendField": {`, `"nested": true`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestMarketShowKeepsBasicOutputWhenSchemaInvalid(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"listing-1","displayName":"Broken","inputSchemaSnapshot":"{"}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketShowCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market show command error = %v", err)
+	}
+	if !strings.Contains(out.String(), "listing-1") || !strings.Contains(out.String(), "input_schema_error") {
 		t.Fatalf("unexpected output: %s", out.String())
 	}
 }
@@ -169,17 +246,23 @@ func TestDeprecatedMarketCommandsRemainAvailable(t *testing.T) {
 	}
 }
 
-func TestMarketQuoteRemovesIdentityFieldsAndPreservesPayload(t *testing.T) {
+func TestMarketQuoteSendsOnlyPublicInputRows(t *testing.T) {
 	var body map[string]any
+	var paths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/loom/v1/marketListings/listing-1:quote" {
-			t.Fatalf("path=%q want quote endpoint", r.URL.Path)
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
+		paths = append(paths, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"quote_id":"quote-1"}`))
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1","estimatedBuyerPayableT":10}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
@@ -188,8 +271,7 @@ func TestMarketQuoteRemovesIdentityFieldsAndPreservesPayload(t *testing.T) {
 		"user_id": 1,
 		"buyer_user_id": 13005,
 		"creator_user_id": 13004,
-		"taskInputs": [{"row": 1}],
-		"workflow_definition": {"name": "wf"}
+		"inputRows": [{"prompt": "review this"}]
 	}`)
 	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
 	cmd := newMarketQuoteCmd(opts)
@@ -198,67 +280,158 @@ func TestMarketQuoteRemovesIdentityFieldsAndPreservesPayload(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("market quote command error = %v", err)
 	}
-	for _, field := range []string{"user_id", "buyer_user_id", "creator_user_id"} {
+	if len(paths) != 2 || paths[0] != "/loom/v1/marketListings/listing-1" || paths[1] != "/loom/v1/marketListings/listing-1:quote" {
+		t.Fatalf("paths=%v want detail then quote", paths)
+	}
+	for _, field := range []string{"user_id", "buyer_user_id", "creator_user_id", "listingVersionId", "taskInputs", "workflowDefinition", "templateSpec"} {
 		if _, ok := body[field]; ok {
 			t.Fatalf("quote body should not include %s: %#v", field, body)
 		}
 	}
-	if body["listingVersionId"] != "lv-1" {
-		t.Fatalf("listingVersionId=%v want lv-1", body["listingVersionId"])
+	rows, ok := body["inputRows"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("inputRows=%#v want one row", body["inputRows"])
 	}
-	if _, ok := body["taskInputs"]; !ok {
-		t.Fatalf("taskInputs was not preserved: %#v", body)
-	}
-	if _, ok := body["workflow_definition"]; !ok {
-		t.Fatalf("workflow_definition was not preserved: %#v", body)
+	row := rows[0].(map[string]any)
+	if row["prompt"] != "review this" {
+		t.Fatalf("row=%#v want prompt", row)
 	}
 }
 
-func TestMarketRunRequiresConfirmBeforeRequest(t *testing.T) {
-	called := false
+func TestMarketQuoteRejectsListingVersionMismatch(t *testing.T) {
+	var paths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inputPath := writeMarketInputFile(t, `{"listingVersionId":"lv-old","inputRows":[{"prompt":"review this"}]}`)
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketQuoteCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `listingVersionId "lv-old" does not match current listing version "lv-1"`) {
+		t.Fatalf("error=%v want listingVersionId mismatch", err)
+	}
+	if len(paths) != 1 || paths[0] != "/loom/v1/marketListings/listing-1" {
+		t.Fatalf("paths=%v want detail only", paths)
+	}
+}
+
+func TestMarketQuoteRejectsInternalPayloadFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(marketListingDetailBody(t)))
 	}))
 	defer server.Close()
 
 	inputPath := writeMarketInputFile(t, `{"taskInputs":[]}`)
 	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
-	cmd := newMarketRunCmd(opts)
+	cmd := newMarketQuoteCmd(opts)
 	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath})
 
 	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "--confirm is required") {
-		t.Fatalf("error=%v want confirm required", err)
-	}
-	if called {
-		t.Fatal("server should not be called without --confirm")
+	if err == nil || !strings.Contains(err.Error(), "taskInputs is an internal Market execution field") {
+		t.Fatalf("error=%v want internal field rejection", err)
 	}
 }
 
-func TestMarketRunRemovesIdentityFieldsAndAddsConfirm(t *testing.T) {
-	var body map[string]any
+func TestMarketQuoteRejectsNullInputRowValue(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/loom/v1/marketListings/listing-1:execute" {
-			t.Fatalf("path=%q want run endpoint", r.URL.Path)
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"runId":"run-1","runTransactionId":"transaction-1"}`))
+		_, _ = w.Write([]byte(marketListingDetailBody(t)))
+	}))
+	defer server.Close()
+
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":null}]}`)
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketQuoteCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), `inputRows[0] field "prompt": null is not supported`) {
+		t.Fatalf("error=%v want null value rejection", err)
+	}
+}
+
+func TestMarketRunQuotesWithoutConfirmAndDoesNotExecute(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1","estimatedBuyerPayableT":10}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":"review this"}]}`)
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketRunCmd(opts)
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market run command error = %v", err)
+	}
+	if len(paths) != 2 || paths[1] != "/loom/v1/marketListings/listing-1:quote" {
+		t.Fatalf("paths=%v want detail and quote only", paths)
+	}
+	if strings.Contains(strings.Join(paths, ","), ":execute") {
+		t.Fatalf("paths=%v must not execute without confirm", paths)
+	}
+	if !strings.Contains(out.String(), "quoteId") || !strings.Contains(stderr.String(), "pass --confirm") {
+		t.Fatalf("out=%q stderr=%q want quote and confirm hint", out.String(), stderr.String())
+	}
+}
+
+func TestMarketRunQuotesThenExecutesPublicInputRows(t *testing.T) {
+	var quoteBody map[string]any
+	var executeBody map[string]any
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			if err := json.NewDecoder(r.Body).Decode(&quoteBody); err != nil {
+				t.Fatalf("decode quote body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1","estimatedBuyerPayableT":10}`))
+		case "/loom/v1/marketListings/listing-1:execute":
+			if err := json.NewDecoder(r.Body).Decode(&executeBody); err != nil {
+				t.Fatalf("decode execute body: %v", err)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"runId":"run-1","runTransactionId":"transaction-1"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
 	inputPath := writeMarketInputFile(t, `{
 		"clientRequestId":"req-1",
 		"user_id": 1,
-		"userId": 2,
-		"buyer_user_id": 13005,
-		"buyerUserId": 13006,
-		"creator_user_id": 13004,
-		"creatorUserId": 13007,
-		"taskInputs":[]
+		"inputRows":[{"prompt":"review this"}]
 	}`)
 	var logs bytes.Buffer
 	opts := &rootOptions{
@@ -273,16 +446,30 @@ func TestMarketRunRemovesIdentityFieldsAndAddsConfirm(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("market run command error = %v", err)
 	}
-	for _, field := range []string{"user_id", "userId", "buyer_user_id", "buyerUserId", "creator_user_id", "creatorUserId"} {
-		if _, ok := body[field]; ok {
-			t.Fatalf("run body should not include %s: %#v", field, body)
+	wantPaths := []string{
+		"/loom/v1/marketListings/listing-1",
+		"/loom/v1/marketListings/listing-1:quote",
+		"/loom/v1/marketListings/listing-1:execute",
+	}
+	if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
+		t.Fatalf("paths=%v want %v", paths, wantPaths)
+	}
+	for _, body := range []map[string]any{quoteBody, executeBody} {
+		if _, ok := body["taskInputs"]; ok {
+			t.Fatalf("body should not include taskInputs: %#v", body)
+		}
+		if _, ok := body["listingVersionId"]; ok {
+			t.Fatalf("body should not include listingVersionId: %#v", body)
+		}
+		if _, ok := body["user_id"]; ok {
+			t.Fatalf("run body should not include user_id: %#v", body)
 		}
 	}
-	if body["confirm"] != true {
-		t.Fatalf("confirm=%v want true", body["confirm"])
+	if executeBody["confirm"] != true {
+		t.Fatalf("confirm=%v want true", executeBody["confirm"])
 	}
-	if body["clientRequestId"] != "req-1" {
-		t.Fatalf("clientRequestId=%v want req-1", body["clientRequestId"])
+	if executeBody["clientRequestId"] != "req-1" {
+		t.Fatalf("clientRequestId=%v want req-1", executeBody["clientRequestId"])
 	}
 	if !strings.Contains(logs.String(), "market run: submitted listing_id=listing-1 run_id=run-1 transaction_id=transaction-1") {
 		t.Fatalf("logs=%q want market run submission identifiers", logs.String())
@@ -291,11 +478,21 @@ func TestMarketRunRemovesIdentityFieldsAndAddsConfirm(t *testing.T) {
 
 func TestMarketRunPrintsGeneratedClientRequestIDBeforeRequestFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, `{"error":"temporary failure"}`, http.StatusServiceUnavailable)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1"}`))
+		case "/loom/v1/marketListings/listing-1:execute":
+			http.Error(w, `{"error":"temporary failure"}`, http.StatusServiceUnavailable)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
-	inputPath := writeMarketInputFile(t, `{"taskInputs":[]}`)
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":"review this"}]}`)
 	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
 	cmd := newMarketRunCmd(opts)
 	var stderr bytes.Buffer
@@ -305,24 +502,33 @@ func TestMarketRunPrintsGeneratedClientRequestIDBeforeRequestFailure(t *testing.
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("market run error = nil, want request failure")
 	}
-	if !strings.Contains(stderr.String(), "clientRequestId: loomloom-cli-") {
-		t.Fatalf("stderr=%q want generated clientRequestId before request failure", stderr.String())
+	if !strings.Contains(stderr.String(), "clientRequestId: loomloom-cli-market-") {
+		t.Fatalf("stderr=%q want stable generated clientRequestId before request failure", stderr.String())
 	}
 }
 
-func TestMarketRunGeneratesClientRequestIDWhenMissing(t *testing.T) {
+func TestMarketRunGeneratesStableClientRequestIDWhenMissing(t *testing.T) {
 	var body map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"run_id":"run-1"}`))
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1"}`))
+		case "/loom/v1/marketListings/listing-1:execute":
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"runId":"run-1"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
-	inputPath := writeMarketInputFile(t, `{"taskInputs":[]}`)
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":"review this"}]}`)
 	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
 	cmd := newMarketRunCmd(opts)
 	var stderr bytes.Buffer
@@ -333,8 +539,8 @@ func TestMarketRunGeneratesClientRequestIDWhenMissing(t *testing.T) {
 		t.Fatalf("market run command error = %v", err)
 	}
 	clientRequestID, ok := body["clientRequestId"].(string)
-	if !ok || !strings.HasPrefix(clientRequestID, "loomloom-cli-") {
-		t.Fatalf("clientRequestId=%#v want generated loomloom-cli-*", body["clientRequestId"])
+	if !ok || !strings.HasPrefix(clientRequestID, "loomloom-cli-market-") {
+		t.Fatalf("clientRequestId=%#v want stable generated loomloom-cli-market-*", body["clientRequestId"])
 	}
 	if body["confirm"] != true {
 		t.Fatalf("confirm=%v want true", body["confirm"])
@@ -344,19 +550,80 @@ func TestMarketRunGeneratesClientRequestIDWhenMissing(t *testing.T) {
 	}
 }
 
+func TestMarketRunStableClientRequestIDIgnoresInputFileFormatting(t *testing.T) {
+	inputA := marketInputPayload{
+		ListingVersionID: "lv-1",
+		InputRows: []map[string]any{{
+			"prompt": "review this",
+		}},
+	}
+	inputB := marketInputPayload{
+		ListingVersionID: "lv-1",
+		InputRows: []map[string]any{{
+			"prompt": "review this",
+		}},
+	}
+	idA, generatedA, err := effectiveMarketClientRequestID("", "", "listing-1", inputA)
+	if err != nil {
+		t.Fatalf("generate id A: %v", err)
+	}
+	idB, generatedB, err := effectiveMarketClientRequestID("", "", "listing-1", inputB)
+	if err != nil {
+		t.Fatalf("generate id B: %v", err)
+	}
+	if !generatedA || !generatedB || idA == "" || idA != idB {
+		t.Fatalf("ids idA=%q generatedA=%t idB=%q generatedB=%t want same stable generated id", idA, generatedA, idB, generatedB)
+	}
+}
+
+func TestMarketRunStableClientRequestIDIgnoresListingVersion(t *testing.T) {
+	inputA := marketInputPayload{
+		ListingVersionID: "lv-1",
+		InputRows: []map[string]any{{
+			"prompt": "review this",
+		}},
+	}
+	inputB := marketInputPayload{
+		ListingVersionID: "lv-2",
+		InputRows: []map[string]any{{
+			"prompt": "review this",
+		}},
+	}
+	idA, _, err := effectiveMarketClientRequestID("", "", "listing-1", inputA)
+	if err != nil {
+		t.Fatalf("generate id A: %v", err)
+	}
+	idB, _, err := effectiveMarketClientRequestID("", "", "listing-1", inputB)
+	if err != nil {
+		t.Fatalf("generate id B: %v", err)
+	}
+	if idA == "" || idA != idB {
+		t.Fatalf("ids idA=%q idB=%q want same stable id across listing versions", idA, idB)
+	}
+}
+
 func TestMarketRunClientRequestIDFlagOverridesInputFile(t *testing.T) {
 	var body map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"run_id":"run-1"}`))
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1"}`))
+		case "/loom/v1/marketListings/listing-1:execute":
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"runId":"run-1"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
-	inputPath := writeMarketInputFile(t, `{"clientRequestId":"from-file","taskInputs":[]}`)
+	inputPath := writeMarketInputFile(t, `{"clientRequestId":"from-file","inputRows":[{"prompt":"review this"}]}`)
 	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
 	cmd := newMarketRunCmd(opts)
 	cmd.SetArgs([]string{
@@ -371,6 +638,145 @@ func TestMarketRunClientRequestIDFlagOverridesInputFile(t *testing.T) {
 	}
 	if body["clientRequestId"] != "from-flag" {
 		t.Fatalf("clientRequestId=%v want from-flag", body["clientRequestId"])
+	}
+}
+
+func TestMarketWorkbookDownloadSavesTemplate(t *testing.T) {
+	var requestedPath string
+	var requestedQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
+		requestedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		w.Header().Set("Content-Disposition", `attachment; filename="market-template.xlsx"`)
+		_, _ = w.Write([]byte("xlsx template"))
+	}))
+	defer server.Close()
+
+	outDir := t.TempDir()
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second, output: "json"}
+	cmd := newMarketWorkbookDownloadCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1", "--output-file", outDir, "--listing-version-id", "lv-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market workbook download command error = %v", err)
+	}
+	if requestedPath != "/loom/v1/marketListings/listing-1/workbook" {
+		t.Fatalf("path=%q want workbook download endpoint", requestedPath)
+	}
+	if requestedQuery != "listingVersionId=lv-1" {
+		t.Fatalf("query=%q want listingVersionId", requestedQuery)
+	}
+	target := filepath.Join(outDir, "market-template.xlsx")
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read workbook: %v", err)
+	}
+	if string(data) != "xlsx template" {
+		t.Fatalf("workbook bytes=%q", string(data))
+	}
+	if !strings.Contains(out.String(), `"path": "`+target+`"`) {
+		t.Fatalf("output=%s want saved path", out.String())
+	}
+}
+
+func TestMarketWorkbookValidateSendsWorkbookPayload(t *testing.T) {
+	var request struct {
+		Filename string `json:"filename"`
+		Content  []byte `json:"content"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loom/v1/marketListings/listing-1:validateWorkbook" {
+			t.Fatalf("path=%q want validate workbook endpoint", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode workbook request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"valid":true}`))
+	}))
+	defer server.Close()
+
+	workbookPath := writeMarketWorkbookFile(t, "input.xlsx", []byte("xlsx bytes"))
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketWorkbookValidateCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--file", workbookPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market workbook validate command error = %v", err)
+	}
+	if request.Filename != "input.xlsx" {
+		t.Fatalf("filename=%q want input.xlsx", request.Filename)
+	}
+	if string(request.Content) != "xlsx bytes" {
+		t.Fatalf("content=%q want workbook bytes", string(request.Content))
+	}
+}
+
+func TestMarketWorkbookRunQuotesThenExecutes(t *testing.T) {
+	var quoteRequest struct {
+		Filename string `json:"filename"`
+		Content  []byte `json:"content"`
+	}
+	var executeRequest struct {
+		Filename        string `json:"filename"`
+		Content         []byte `json:"content"`
+		Confirm         bool   `json:"confirm"`
+		ClientRequestID string `json:"clientRequestId"`
+	}
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1:quoteWorkbook":
+			if err := json.NewDecoder(r.Body).Decode(&quoteRequest); err != nil {
+				t.Fatalf("decode quote workbook request: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1","estimatedBuyerPayableT":10}`))
+		case "/loom/v1/marketListings/listing-1:executeWorkbook":
+			if err := json.NewDecoder(r.Body).Decode(&executeRequest); err != nil {
+				t.Fatalf("decode execute workbook request: %v", err)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"runId":"run-1","runTransactionId":"transaction-1"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	workbookPath := writeMarketWorkbookFile(t, "input.xlsx", []byte("xlsx bytes"))
+	var logs bytes.Buffer
+	opts := &rootOptions{
+		server:    server.URL + "/loom/v1",
+		timeout:   time.Second,
+		verbose:   true,
+		logWriter: &logs,
+	}
+	cmd := newMarketWorkbookRunCmd(opts)
+	cmd.SetArgs([]string{"listing-1", "--file", workbookPath, "--client-request-id", "req-1", "--confirm"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market workbook run command error = %v", err)
+	}
+	wantPaths := []string{
+		"/loom/v1/marketListings/listing-1:quoteWorkbook",
+		"/loom/v1/marketListings/listing-1:executeWorkbook",
+	}
+	if strings.Join(paths, ",") != strings.Join(wantPaths, ",") {
+		t.Fatalf("paths=%v want %v", paths, wantPaths)
+	}
+	if string(quoteRequest.Content) != "xlsx bytes" || string(executeRequest.Content) != "xlsx bytes" {
+		t.Fatalf("workbook content mismatch quote=%q execute=%q", string(quoteRequest.Content), string(executeRequest.Content))
+	}
+	if !executeRequest.Confirm || executeRequest.ClientRequestID != "req-1" {
+		t.Fatalf("execute request=%#v want confirm and clientRequestId", executeRequest)
+	}
+	if strings.Contains(logs.String(), "eGxzeCBieXRlcw==") {
+		t.Fatalf("logs should not contain workbook base64: %s", logs.String())
 	}
 }
 
@@ -407,4 +813,45 @@ func writeMarketInputFile(t *testing.T, content string) string {
 		t.Fatalf("write input file: %v", err)
 	}
 	return filePath
+}
+
+func writeMarketWorkbookFile(t *testing.T, name string, content []byte) string {
+	t.Helper()
+	filePath := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(filePath, content, 0o644); err != nil {
+		t.Fatalf("write workbook file: %v", err)
+	}
+	return filePath
+}
+
+func marketListingDetailBody(t *testing.T) string {
+	t.Helper()
+	schema := `{
+		"schema_version": "loom_market_public_input_schema_v1",
+		"fields": [
+			{
+				"key": "prompt",
+				"label": "Prompt",
+				"description": "Text prompt",
+				"required": true,
+				"value_type": "string",
+				"source_kind": "inline_text"
+			}
+		],
+		"instructions": ["One row per task."],
+		"sample_rows": [{"prompt": "write a short note"}]
+	}`
+	body, err := json.Marshal(map[string]any{
+		"id":                          "listing-1",
+		"displayName":                 "Writer",
+		"description":                 "Writes text",
+		"listingVersionId":            "lv-1",
+		"taskFixedFeeT":               10,
+		"executionAvailabilityStatus": "available",
+		"inputSchemaSnapshot":         schema,
+	})
+	if err != nil {
+		t.Fatalf("marshal listing detail: %v", err)
+	}
+	return string(body)
 }

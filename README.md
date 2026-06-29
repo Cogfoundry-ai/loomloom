@@ -341,7 +341,11 @@ Monetary values such as `taskFixedFeeT` and `amountT` are in API units, where 10
 | `loomloom market list` | Browse published Market SkillBots. |
 | `loomloom market show <listing-id>` | Show one SkillBot, including its input schema. |
 | `loomloom market quote <listing-id> --input-file <json>` | Estimate execution cost. |
-| `loomloom market run <listing-id> --input-file <json> --confirm` | Execute a SkillBot (paid). |
+| `loomloom market run <listing-id> --input-file <json> --confirm --client-request-id <id>` | Execute a SkillBot from JSON input rows (paid). |
+| `loomloom market workbook download <listing-id> --output-file <xlsx>` | Download a Market workbook template. |
+| `loomloom market workbook validate <listing-id> --file <xlsx>` | Validate a filled Market workbook. |
+| `loomloom market workbook quote <listing-id> --file <xlsx>` | Estimate execution cost for a workbook. |
+| `loomloom market workbook run <listing-id> --file <xlsx> --confirm --client-request-id <id>` | Execute a SkillBot from a workbook (paid). |
 | `loomloom usage list` | List my Market SkillBot usage records. |
 | `loomloom usage get <run-transaction-id>` | Show one usage record. |
 
@@ -397,7 +401,7 @@ Notes:
 - Use `loomloom template-spec docs examples` for patterns.
 - Use `loomloom template-spec docs conversation` for agent-assisted conversational authoring.
 - Template changes require downloading a new workbook.
-- `precheck-workbook` estimates model/API cost and balance; it does not create a run.
+- Run `precheck-workbook` before submitting when you want to estimate model/API cost and balance; precheck does not create a run or execute tasks.
 - Precheck text output includes `estimated_cost`, `available_balance`, and `sufficient`; JSON output uses `estimatedTotalCostT`.
 - `submit-workbook` creates a real hosted run; agents should ask for explicit confirmation before submitting.
 - `template-spec run` also creates a real hosted run and requires the same confirmation.
@@ -430,39 +434,39 @@ Publishing does not turn the private template itself into a public object. The s
 loomloom market list --keyword "tweet"
 loomloom market show <listing-id>
 
-# 2. Estimate cost (the input file carries a taskInputs array shaped to the listing schema)
+# 2A. JSON input: estimate cost from public input rows
 loomloom market quote <listing-id> --input-file ./request.json
 
-# 3. Execute (paid; --confirm is required)
-loomloom market run <listing-id> --input-file ./request.json --confirm
+# 3A. JSON input: execute after confirmation (paid)
+loomloom market run <listing-id> --input-file ./request.json --confirm --client-request-id <stable-id>
 
-# 4. Review your own usage
+# 2B. Workbook input: download, fill, validate, and quote
+loomloom market workbook download <listing-id> --output-file ./market-input.xlsx
+loomloom market workbook validate <listing-id> --file ./market-input.xlsx
+loomloom market workbook quote <listing-id> --file ./market-input.xlsx
+
+# 3B. Workbook input: execute after confirmation (paid)
+loomloom market workbook run <listing-id> --file ./market-input.xlsx --confirm --client-request-id <stable-id>
+
+# 4. Review your own usage and download results
 loomloom usage list
 loomloom usage get <run-transaction-id>
+loomloom run result-workbook <run-id> --output-file ./market-result.xlsx
 ```
 
 Example `request.json`:
 
 ```json
 {
-  "listingVersionId": "<listing-version-id>",
-  "taskInputs": [
+  "inputRows": [
     {
-      "steps": {
-        "<step-id>": {
-          "executions": [
-            {
-              "prompt": "write a launch tweet"
-            }
-          ]
-        }
-      }
+      "prompt": "write a launch tweet"
     }
   ]
 }
 ```
 
-Use the listing detail to understand public fields and obtain `listingVersionId`, but do not infer internal step IDs from `inputSchemaSnapshot`: the public snapshot may not expose them. The current CLI expects an exact Product API `taskInputs` payload. If the user or integration does not provide that mapping, stop and ask for a compatible request JSON instead of guessing.
+Use `market show` to understand public fields and examples before building JSON input. Show users `inputSchemaSnapshot.fields[].label`, submit `inputRows` with `inputSchemaSnapshot.fields[].key`, and treat `fields[].required` as required input. Do not send `taskInputs`, `workflowDefinition`, `templateSpec`, or hidden Core / TemplateSpec structures to Market buyer execution endpoints.
 
 ### Creator: publish and manage a SkillBot
 
@@ -498,9 +502,13 @@ loomloom creator transactions
 Notes:
 
 - `market run` creates a real paid run; agents should run `market quote` first and ask for explicit confirmation before executing.
+- For Market workbook runs, validate and quote the workbook before execution, then download the result with `run result-workbook`.
 - `listing publish` and `listing update` submit changes for review; they do not take effect until approved.
 - `listing publish --listing-id <listing-id>` submits a new version for the existing listing. The currently published version stays active until the new review is approved.
 - `listing update`, `listing unlist`, `listing relist`, and review withdrawal change remote state. Agents should summarize the action and ask for explicit confirmation before invoking them.
+- For Market SkillBots, `market quote` estimates the buyer payable amount before execution. The platform takes 10% from each call fee; creator net earnings are 90% of the call fee.
+- Reuse the same `--client-request-id` only when retrying the identical paid Market payload. Use a new ID when any input changes.
+- Workbook `content` is sent as base64 inside JSON requests; do not print the full base64. `accessUrl` values in result rows are temporary signed URLs; do not put them in long-lived logs or docs.
 - Monetary `*FeeT` / `*AmountT` / `*PayableT` values are in API units where 10,000,000 units equal 1 currency unit.
 
 ---
@@ -514,11 +522,12 @@ orchestration-input upload → inputFileId → template-spec precheck → templa
 template-spec run / run submit → runId → run watch / result commands
 listing publish → reviewRequestId → creator review get/withdraw
 market run → runTransactionId and runId → usage get / run watch
+market workbook run → runTransactionId and runId → usage get / run watch / result-workbook
 ```
 
 Text output uses labels such as `input_file_id`; JSON output uses Product API field names such as `inputFileId`.
 
-For `template submit-file`, `template-spec submit-workbook`, `run submit`, `template-spec run`, and `market run`, pass an explicit `--client-request-id`, retain it with the request, and reuse it only when retrying the identical payload. Use a new ID if the payload changes. Do not blindly retry paid or remote-state-changing commands after an ambiguous failure; first check whether the original request succeeded.
+For `template submit-file`, `template-spec submit-workbook`, `run submit`, `template-spec run`, `market run`, and `market workbook run`, pass an explicit `--client-request-id`, retain it with the request, and reuse it only when retrying the identical payload. Use a new ID if the payload changes. Do not blindly retry paid or remote-state-changing commands after an ambiguous failure; first check whether the original request succeeded.
 
 ---
 

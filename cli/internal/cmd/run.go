@@ -404,7 +404,7 @@ func newRunResultRowsCmd(opts *rootOptions) *cobra.Command {
 			}
 
 			tw := newTabWriter(cmd.OutOrStdout())
-			if _, err := fmt.Fprintln(tw, "row\tstatus\tartifacts\tinput"); err != nil {
+			if _, err := fmt.Fprintln(tw, "row\tstatus\tartifacts\tresult\tinput"); err != nil {
 				return err
 			}
 			for _, row := range resp.Rows {
@@ -412,7 +412,7 @@ func newRunResultRowsCmd(opts *rootOptions) *cobra.Command {
 				if len(input) > 120 {
 					input = input[:117] + "..."
 				}
-				if _, err := fmt.Fprintf(tw, "%d\t%s\t%d\t%s\n", row.RowIndex, row.Status, len(row.Artifacts), input); err != nil {
+				if _, err := fmt.Fprintf(tw, "%d\t%s\t%d\t%s\t%s\n", row.RowIndex, row.Status, len(row.Artifacts), runResultPreview(row), input); err != nil {
 					return err
 				}
 			}
@@ -426,6 +426,33 @@ func newRunResultRowsCmd(opts *rootOptions) *cobra.Command {
 	cmd.Flags().IntVar(&pageSize, "page-size", 50, "Rows per page, server clamps to its maximum")
 	cmd.Flags().StringVar(&pageToken, "page-token", "", "Pagination token returned by the previous call")
 	return cmd
+}
+
+func runResultPreview(row runResultRow) string {
+	inlineTexts := make([]string, 0)
+	hasAccessURL := false
+	for _, artifact := range row.Artifacts {
+		if strings.TrimSpace(artifact.InlineText) != "" {
+			inlineTexts = append(inlineTexts, oneLine(artifact.InlineText))
+		}
+		if strings.TrimSpace(artifact.AccessURL) != "" {
+			hasAccessURL = true
+		}
+	}
+	if len(inlineTexts) > 0 {
+		preview := strings.Join(inlineTexts, " | ")
+		if len(preview) > 160 {
+			return preview[:157] + "..."
+		}
+		return preview
+	}
+	if hasAccessURL {
+		return "download_url_available"
+	}
+	if strings.TrimSpace(row.Error) != "" {
+		return oneLine(row.Error)
+	}
+	return "-"
 }
 
 func newRunResultWorkbookCmd(opts *rootOptions) *cobra.Command {

@@ -130,31 +130,26 @@ Buyer role (use and pay for a SkillBot):
 - `loomloom market list` — browse published SkillBots (`--keyword`, `--page-size`, `--page-token`, `--order-by`).
 - `loomloom market show <listing-id>` — show one SkillBot and its `inputSchemaSnapshot`; read it before building input.
 - `loomloom market quote <listing-id> --input-file <request.json>` — estimate cost (`estimatedBuyerPayableT`, `taskCount`, `taskFixedFeeT`).
-- `loomloom market run <listing-id> --input-file <request.json> --confirm` — paid execution; see the Submission Confirmation Rule.
+- `loomloom market run <listing-id> --input-file <request.json> --confirm --client-request-id <id>` — paid JSON input execution; see the Submission Confirmation Rule.
+- `loomloom market workbook download <listing-id> --output-file <xlsx>` — download a public Market input workbook.
+- `loomloom market workbook validate <listing-id> --file <xlsx>` — validate a filled Market workbook.
+- `loomloom market workbook quote <listing-id> --file <xlsx>` — estimate cost for a filled Market workbook.
+- `loomloom market workbook run <listing-id> --file <xlsx> --confirm --client-request-id <id>` — paid workbook execution; see the Submission Confirmation Rule.
 - `loomloom usage list` and `loomloom usage get <run-transaction-id>` — buyer's own calls and settlement; use the returned `runTransactionId`.
 
-The `--input-file` JSON for quote and run carries a `taskInputs` array shaped to the listing schema:
+For JSON input, `market quote` and `market run` use public `inputRows` built from `inputSchemaSnapshot.fields[].key`. Do not show this request JSON to users unless they explicitly ask for JSON/API details:
 
 ```json
 {
-  "listingVersionId": "<listing-version-id>",
-  "taskInputs": [
+  "inputRows": [
     {
-      "steps": {
-        "<step-id>": {
-          "executions": [
-            {
-              "prompt": "write a launch tweet"
-            }
-          ]
-        }
-      }
+      "prompt": "write a launch tweet"
     }
   ]
 }
 ```
 
-Read `market show` first to understand public fields and obtain `listingVersionId`, but do not infer internal step IDs from `inputSchemaSnapshot`: it may not expose them. The current CLI expects an exact Product API `taskInputs` payload. If no compatible mapping or request JSON is available, stop and ask for it instead of guessing.
+Read `market show` first to understand public fields and examples. Use `fields[].label` for user-facing prompts, `fields[].key` as the submitted `inputRows` key, `fields[].value_type` for type checks, `fields[].required` for required validation, and `sample_rows` as examples. Do not send `taskInputs`, `workflowDefinition`, `templateSpec`, or hidden Core / TemplateSpec structures to Market buyer execution endpoints. Do not infer hidden step IDs, hidden prompts, or internal mappings from `inputSchemaSnapshot`.
 
 Creator role (publish and manage a SkillBot):
 
@@ -171,20 +166,45 @@ All `*FeeT`, `*CostT`, `*AmountT`, and `*PayableT` values are in API units where
 
 ## Submission Confirmation Rule
 
-Any command that actually submits work to the hosted LoomLoom service must receive a second explicit confirmation from the user in the current conversation.
+Installing, configuring, discovering, downloading, filling, validating, uploading, quoting, and prechecking are preparation steps. They do not execute a template and do not create billable model/API usage. Any command that actually creates a hosted LoomLoom run must receive a second explicit confirmation from the user in the current conversation after the agent has shown the current fee estimate.
+
+Key principles:
+
+- Installation is not execution. Do not imply that installing or checking the CLI can create charges.
+- Every run needs a fresh fee confirmation. A previous confirmation for a different input, file, template, version, listing, or conversation is not reusable.
+- Receiving user input values is preparation consent, not execution consent. If the user provides row values such as product name, selling points, and platform, prepare the input, validate it, and precheck it; do not submit yet.
+- Private template execution binds to an explicit private template version (`template_id` + `version_id`).
+- Market SkillBot execution binds to a Listing. At run time, the service resolves the current sellable Listing Version. Do not bypass Market by directly running the underlying private template version.
+- Black-box templates must stay black-box. Do not reveal, reconstruct, infer, or route around hidden execution logic, hidden prompts, hidden step IDs, CLI permissions, billing, or Market controls.
+- The user does not need to understand the CLI. Use CLI commands internally, but do not show raw CLI commands, raw JSON request bodies, generated request filenames, or technical confirmation phrases unless the user explicitly asks for CLI/API details.
+- Use natural-language confirmation prompts. In English conversations, use `Reply: Confirm`. In localized conversations, use the natural localized equivalent. Do not ask the user to reply with `confirm submit`.
+- For user-facing wording, it is acceptable to say "public Market template" for a Market SkillBot. Internally, still treat it as a Market Listing/SkillBot, not an official template.
+
+## Default Input Experience
+
+When the user says they want to use, try, run, or test a template, default to the Excel workbook experience. Let the user see and fill a workbook first. The agent/CLI may convert the workbook or user-provided field values to the backend request format internally at quote/precheck/submission time.
+
+Use JSON, JSONL, API request files, or raw request bodies only when the user explicitly asks for JSON/API integration, programmatic input, or provides an existing compatible request file. For Market JSON input, use public `inputRows`, never `taskInputs`.
+
+Default by template type:
+
+- Official templates: use `template download` → workbook input → `template validate-file` → `template precheck-file` → user confirmation → `template submit-file`.
+- Private templates: use `template-spec download-workbook` → workbook input → `template-spec validate-workbook` → `template-spec precheck-workbook` → user confirmation → `template-spec submit-workbook`.
+- Private template JSONL execution: use only when the user explicitly asks for JSONL/API/programmatic input.
+- Public Market templates / SkillBots: prefer a user-visible workbook / Excel-style input experience from the listing's public schema, or fill that structure from the user's natural-language field values. Internally use Market workbook commands or build public `inputRows` for `market quote` and `market run`; do not show raw JSON unless asked.
 
 Treat the interaction as one of three states:
 
 1. `default-prep`
    The user is still exploring or speaking generally, such as "help me run a batch", "run this for me", or "you decide".
-   Prepare, download, and validate only. Do not submit.
+   Prepare, download, upload, validate, quote, and precheck only. Do not submit.
 
 2. `auto-run-candidate`
    The user explicitly asks the agent to execute, such as "run it automatically", "submit it directly", or "execute it for me".
-   Still do not submit. First provide an execution summary and wait for confirmation.
+   Still do not submit. First prepare the input, run the relevant precheck or quote command, provide a fee confirmation summary, and wait for confirmation.
 
 3. `confirmed-to-run`
-   After seeing the execution summary, the user explicitly replies with "confirm submit", "submit it", "start", "continue execution", or equivalent.
+   After seeing the fee confirmation summary, the user explicitly replies with "confirm", "submit it", "start", "continue execution", or equivalent.
    Only then may you submit.
 
 This rule applies to:
@@ -194,24 +214,182 @@ This rule applies to:
 - `loomloom run submit <template-id> -f rows.jsonl`
 - `loomloom template-spec run <template-id> --version-id <version-id> --input-file-id <input_file_id>`
 - `loomloom market run <listing-id> --input-file <request.json> --confirm`
+- `loomloom market workbook run <listing-id> --file <xlsx-path> --confirm`
 
-For `loomloom market run`, first run `loomloom market quote` and include the returned estimate in the execution summary.
+Before using an official template workbook, follow this order:
+
+1. `loomloom template download <template-id>`
+2. Fill or update the workbook.
+3. `loomloom template validate-file <template-id> <xlsx-path>`
+4. `loomloom template precheck-file <template-id> <xlsx-path>`
+5. Show the fee confirmation summary and wait for the user's explicit confirmation.
+6. Only after confirmation, call `loomloom template submit-file <template-id> <xlsx-path>`.
+
+Before using a private template workbook, follow this order:
+
+1. `loomloom template-spec download-workbook <template-id> <version-id>`
+2. Fill or update the workbook.
+3. `loomloom template-spec validate-workbook <template-id> <version-id> <xlsx-path>`
+4. `loomloom template-spec precheck-workbook <template-id> <version-id> <xlsx-path>`
+5. Show the fee confirmation summary and wait for the user's explicit confirmation.
+6. Only after confirmation, call `loomloom template-spec submit-workbook <template-id> <version-id> <xlsx-path>`.
+
+Before using a private template with JSONL rows, follow this order:
+
+1. Prepare the JSONL rows.
+2. `loomloom orchestration-input upload <file.jsonl>`
+3. `loomloom template-spec precheck <template-id> --version-id <version-id> --input-file-id <input_file_id>`
+4. Show the fee confirmation summary and wait for the user's explicit confirmation.
+5. Only after confirmation, call `loomloom template-spec run <template-id> --version-id <version-id> --input-file-id <input_file_id>`.
+
+Before using a Market SkillBot / public market template with JSON input, follow this order:
+
+1. `loomloom market show <listing-id>`
+2. Provide an Excel-style input experience based on the public listing schema, or fill the fields from the user's natural-language values.
+3. Internally build public `inputRows` using `inputSchemaSnapshot.fields[].key`.
+4. `loomloom market quote <listing-id> --input-file <request.json>`
+5. Show the public market template confirmation template, including fee rules, and wait for the user's explicit confirmation.
+6. Only after confirmation, call `loomloom market run <listing-id> --input-file <request.json> --confirm --client-request-id <stable-id>`.
+
+Before using a Market SkillBot / public market template with a workbook, follow this order:
+
+1. `loomloom market show <listing-id>`
+2. `loomloom market workbook download <listing-id> --output-file <xlsx-path>`
+3. Let the user fill or approve the workbook values.
+4. `loomloom market workbook validate <listing-id> --file <xlsx-path>`
+5. `loomloom market workbook quote <listing-id> --file <xlsx-path>`
+6. Show the public market template confirmation template, including fee rules, and wait for the user's explicit confirmation.
+7. Only after confirmation, call `loomloom market workbook run <listing-id> --file <xlsx-path> --confirm --client-request-id <stable-id>`.
+
+If a requested execution path does not provide a separate quote or precheck command that can return the fee estimate before submission, do not submit. Explain that a pre-submission estimate is required and choose an equivalent workbook or private-template flow that supports precheck, or ask the user for a compatible prechecked path.
 
 Validation, precheck commands, downloads, schema inspection, model lookup, quoting, `doctor`, asset upload, orchestration-input upload, artifact listing, listing/usage/earnings reads, and result backfill do not start a new paid run and do not require the second confirmation.
 
-The execution summary must include:
+The fee confirmation summary must include:
 
 - template or listing ID
+- template type: official template, private template version, or Market SkillBot
+- for private templates, the fixed `version_id`
+- for Market SkillBots, the Listing ID and that the service will use the current sellable Listing Version
 - input file path or input source
 - row count or task size
 - action to be performed
-- estimated cost; if cost is only known after submission, say so clearly
-- a clear prompt: `Reply "confirm submit" before I start.`
+- estimated model/API cost or buyer payable amount, with currency shown as `CNY 0.0119` or `USD 0.0119`, not as a bare currency symbol
+- available balance and sufficiency when the precheck/quote returns balance information
+- a clear natural-language confirmation prompt. In English conversations, use `Reply: Confirm`.
+
+For private and official template precheck output, preserve the server-provided currency. Do not perform local USD/CNY conversion. `*T` values use API units where 10,000,000 units equal 1 currency unit.
+
+For Market quote/run confirmation, the platform fee disclosure is mandatory before submission:
+
+- Show that the platform takes 10% from each call fee.
+- Show `creator_receives = call fee x 90%` using the current quoted pricing.
+- If quote returns `estimatedBuyerPayableT`, use it as the call fee for the estimate.
+- If quote returns task count or per-task fixed fee, show the estimated creator receipt per task when possible.
+- If a needed pricing field is missing, state which field is missing and do not submit until the fee summary is clear.
+
+For user-facing confirmations, use the following templates instead of raw CLI output, raw JSON, or terse key/value summaries.
+
+Public Market template / SkillBot confirmation template:
+
+```text
+This will make a paid call to a public Market template. Please confirm the fee before execution.
+
+Template: <template_display_name>
+Call type: public Market template
+Listing ID: <listing_id>
+Locked version: <listing_version_id_or_current_sellable_version>
+
+Input:
+- Task count: <task_count> task(s)
+- Billing rule: creator call fee is charged per task
+
+Fee estimate:
+- Creator call fee: <creator_call_fee> (<task_count> task(s) x <task_fixed_fee>)
+- Estimated model/API cost: <estimated_model_api_cost_or_note>
+- Estimated pre-authorization: <estimated_buyer_payable>
+
+Final billing rules:
+- Final charge = creator call fee + actual model/API cost
+- Creator call fee is locked at order time and settled after the run completes
+- Model/API cost is settled by actual usage; unused pre-authorization is released or adjusted
+- Initial rule: if the task fails or partially fails, the creator call fee is still charged and is not refundable
+
+Please confirm whether to execute.
+Reply: Confirm
+```
+
+Private template confirmation template:
+
+```text
+This will execute a private template. Please confirm the fee before execution.
+
+Template: <template_display_name>
+Call type: private template
+Template ID: <template_id>
+Template version: <version_id>
+
+Input:
+- Task count: <task_count> task(s)
+
+Fee estimate:
+- Estimated model/API cost: <estimated_model_api_cost>
+- Estimated pre-authorization: <estimated_model_api_cost>
+
+Final billing rules:
+- Final charge = actual model/API cost
+- Model/API cost is settled by actual usage; unused pre-authorization is released or adjusted
+- Private templates do not create creator call fees, platform commissions, or Market revenue sharing
+
+Please confirm whether to execute.
+Reply: Confirm
+```
+
+Do not invent fee fields. For private/official precheck, use `estimatedTotalCostT` and the server-provided currency. For Market quote, prefer `estimatedBuyerPayableT` for the total pre-authorization. Compute creator call fee from `taskCount x taskFixedFeeT` only when those fields are present. If Market quote does not separately return model/API cost, show `CNY 0.00` only when the quoted payable equals the creator call fee; otherwise say "included in the estimated pre-authorization" rather than inventing a number.
 
 If the user says "do not run yet", "wait", or similar, stay in preparation mode.
-For `template submit-file`, `template-spec submit-workbook`, `run submit`, `template-spec run`, and `market run`, pass an explicit stable `--client-request-id` and retain it for safe retry of the identical payload.
+For `template submit-file`, `template-spec submit-workbook`, `run submit`, `template-spec run`, `market run`, and `market workbook run`, pass an explicit stable `--client-request-id` and retain it for safe retry of the identical payload.
 
-Present the confirmation summary in plain business language (what will happen, which template or SkillBot, how many tasks, the cost). Do not show the raw CLI command in the confirmation unless the user explicitly asks to see it.
+Do not print full workbook base64 `content`. Do not copy result-row `accessUrl` values into long-lived logs or docs; they are temporary signed URLs. Prefer displaying `inlineText` for small text artifacts and saying that a download URL is available for file artifacts.
+
+Present the confirmation summary in plain business language (what will happen, which template or SkillBot, how many tasks, the cost, and for Market the 10% platform fee and 90% creator receipt). Do not show the raw CLI command in the confirmation unless the user explicitly asks to see it.
+
+## Creator Earnings Response
+
+When the user asks about creator income, template earnings, settlement, revenue, failed settlement, or how much a public market template earned, use `creator earnings` and, when recent line items are needed, `creator transactions`. Do not show raw CLI output or raw JSON unless the user asks.
+
+Use this response shape for creator earnings:
+
+```text
+Here is the earnings overview for your public Market template:
+
+Template: <template_display_name>
+
+Cumulative:
+- Calls: <total_call_count>
+- Creator call fee: <gross_creator_call_fee>
+- Platform commission: <platform_fee>
+- Creator net receivable: <creator_net_receivable>
+
+Settlement:
+- Settled: <settled_amount>
+- Pending: <pending_amount>
+- Failed: <failed_amount>
+
+Exception:
+<If failures exist: There are currently <failed_count> failed settlement item(s). Consider handling or retrying settlement. Otherwise: No settlement exceptions.>
+
+Latest 5:
+1. Run <run_id>, net <amount>, status: <settled|failed|pending>
+2. Run <run_id>, net <amount>, status: <settled|failed|pending>
+3. Run <run_id>, net <amount>, status: <settled|failed|pending>
+4. Run <run_id>, net <amount>, status: <settled|failed|pending>
+5. Run <run_id>, net <amount>, status: <settled|failed|pending>
+
+Full details can be exported to Excel if needed.
+```
+
+If a field is missing from the API response, omit that line or say it was not returned. Do not fabricate counts, run IDs, settlement status, or amounts. Show at most five recent transactions by default.
 
 ## Remote State Change Confirmation Rule
 
@@ -234,10 +412,10 @@ Prefer `--output json` whenever one command feeds another. Extract and preserve 
 - `orchestration-input upload` → `inputFileId` → `template-spec precheck --input-file-id` → `template-spec run --input-file-id`
 - run submission → `runId` → `run watch`, `run result-rows`, or `run result-workbook`
 - `listing publish` → `reviewRequestId` → creator review commands
-- `market run` → `runTransactionId` and `runId` → `usage get` and run commands
+- `market run` and `market workbook run` → `runTransactionId` and `runId` → `usage get`, run commands, and `run result-workbook`
 
 Never convert `inputAssetId` (`ia_xxx`) into `inputFileId`, and never guess IDs from names.
-For the five supported submission commands listed in the Submission Confirmation Rule, pass an explicit `--client-request-id`, retain it with the request, and reuse it only for an identical retry. A changed payload requires a new ID.
+For the supported submission commands listed in the Submission Confirmation Rule, pass an explicit `--client-request-id`, retain it with the request, and reuse it only for an identical retry. A changed payload requires a new ID.
 
 ## Error Handling
 
@@ -289,7 +467,11 @@ The public CLI currently supports:
 - `loomloom market list`
 - `loomloom market show <listing-id>`
 - `loomloom market quote <listing-id> --input-file <request.json>`
-- `loomloom market run <listing-id> --input-file <request.json> --confirm`
+- `loomloom market run <listing-id> --input-file <request.json> --confirm --client-request-id <id>`
+- `loomloom market workbook download <listing-id> --output-file <xlsx>`
+- `loomloom market workbook validate <listing-id> --file <xlsx>`
+- `loomloom market workbook quote <listing-id> --file <xlsx>`
+- `loomloom market workbook run <listing-id> --file <xlsx> --confirm --client-request-id <id>`
 - `loomloom usage list`
 - `loomloom usage get <run-transaction-id>`
 - `loomloom listing publish <template-id> --template-version-id <id> --display-name <name> --task-fixed-fee-t <fee>`
@@ -392,7 +574,7 @@ Automatic generation rules:
 
 - Simple mode: core material is a user input column; role/step processing requirements are written as template preset instructions, not user-fillable columns.
 - Custom mode: both core material and role/step processing requirements are user input columns; the system stably composes complete processing input for each step.
-- Both versions: show both TemplatePlans first, get user confirmation, then generate two TemplateSpecs. Remote creation still uses the "confirm create template" gate for each template.
+- Both versions: show both TemplatePlans first, get user confirmation, then generate two TemplateSpecs. Remote creation still uses the explicit creation confirmation gate for each template.
 
 Acceptance criteria:
 
@@ -410,7 +592,7 @@ Creation confirmation gate:
 - "Create a PRD review template" only starts the flow; it does not confirm remote creation.
 - Environment variables, token, and server URL are configuration, not creation confirmation.
 - "Generate spec" only means generate and locally check the spec; it does not confirm running `template-spec create`.
-- Before running `template-spec create`, describe in plain language what will be created (template name, what it does, the local check result) and ask the user to reply `confirm create template`. Do not show the raw CLI command unless the user explicitly asks to see it.
+- Before running `template-spec create`, describe in plain language what will be created (template name, what it does, the local check result) and ask for a natural confirmation. In English conversations, use `Reply: Confirm creation`. Do not show the raw CLI command unless the user explicitly asks to see it.
 
 TemplatePlan should cover:
 

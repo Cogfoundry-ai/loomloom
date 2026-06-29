@@ -1,7 +1,7 @@
 {
   "name": "LoomLoom",
   "description": "Public distribution manifest for the LoomLoom CLI and agent skills for template execution, custom workflows, Market SkillBots, runs, artifacts, and creator operations",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "cli": {
     "name": "loomloom",
     "scope": [
@@ -43,6 +43,10 @@
       "market.show",
       "market.quote",
       "market.run",
+      "market.workbook.download",
+      "market.workbook.validate",
+      "market.workbook.quote",
+      "market.workbook.run",
       "usage.list",
       "usage.get",
       "listing.publish",

@@ -216,7 +216,15 @@ type BinaryResponse struct {
 }
 
 func (c *Client) GetBinary(ctx context.Context, path string) (*BinaryResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint(path), nil)
+	return c.GetBinaryWithQuery(ctx, path, nil)
+}
+
+func (c *Client) GetBinaryWithQuery(ctx context.Context, path string, query url.Values) (*BinaryResponse, error) {
+	endpoint := c.endpoint(path)
+	if len(query) > 0 {
+		endpoint += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
