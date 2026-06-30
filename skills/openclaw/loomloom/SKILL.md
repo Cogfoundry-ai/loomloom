@@ -421,6 +421,20 @@ TemplateSpec authoring constraints:
 - Expose a model column only when the step sets `allowModelOverride=true` and a field binds to `paramKey=model`.
 - Do not bind `provider` or `mode`.
 
+## Installing Templates As Local Agent Skills
+
+When the user asks to install, add, or turn a LoomLoom template into a local Codex / Claude Code / OpenClaw skill, treat that as installation, not execution. Installation must not submit a run, quote/precheck costs, execute a Market SkillBot, or create billable usage.
+
+Use the install preview before writing files:
+
+`loomloom skill install market <listing-id> --agent <codex|claude|openclaw> --output-dir <skill-dir> --dry-run --output json`
+
+`loomloom skill install template-spec <template-id> <version-id> --agent <codex|claude|openclaw> --output-dir <skill-dir> --dry-run --output json`
+
+Show an installation confirmation card with the Skill name, source, binding, target agent, output directory, main inputs, and the fact that every real run still needs quote/precheck plus explicit confirmation. If the user has not provided a directory, ask for one; do not guess the agent's default skill directory in this phase. Only after the user confirms installation, call the same command without `--dry-run`.
+
+Market Skill installs bind to the Listing. The installed listing version is only traceability; each future execution must read the current Listing and use Market quote/run or Market workbook quote/run. Private template installs bind to the exact `template_id + version_id` and must use `template-spec` commands, not Market commands. If the listing is unavailable, permissions fail, or a version is unavailable, stop and explain the issue.
+
 ## Trusted Result Sources
 
 The submitted workbook and server-side run input snapshot are the sources of truth. After the run completes, prefer `loomloom run result-workbook <run-id>` because the server aligns original input snapshots and artifacts. Use `template backfill-results` only when the user explicitly needs the older local Excel backfill flow.

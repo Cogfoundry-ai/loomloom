@@ -334,6 +334,15 @@ Monetary values such as `taskFixedFeeT` and `amountT` are in API units, where 10
 | `loomloom model list --step-type <type>` | List executable models for a step type. |
 | `loomloom asset list` | Aggregated list of my private templates and available Market SkillBots; does not include official templates. |
 
+### Local Agent Skills
+
+| Command | Description |
+| --- | --- |
+| `loomloom skill install market <listing-id> --agent <agent> --output-dir <skill-dir>` | Generate a local agent Skill wrapper for a Market SkillBot listing. |
+| `loomloom skill install template-spec <template-id> <version-id> --agent <agent> --output-dir <skill-dir>` | Generate a local agent Skill wrapper for a private template version. |
+
+Use `--dry-run --output json` before writing final Skill files when an agent needs a stable installation preview for a confirmation card. Dry-run does not create the final `--output-dir` or write `SKILL.md` / `loomloom-skill.json`; it may create and immediately remove a temporary probe directory to verify writability. In this first phase, `--output-dir` is the directory for one generated Skill, not an agent skills root directory. Installation only writes local wrapper files; it does not execute a template, quote/precheck costs, or create billable model/API usage.
+
 ### Market — buyer
 
 | Command | Description |
@@ -467,6 +476,31 @@ Example `request.json`:
 ```
 
 Use `market show` to understand public fields and examples before building JSON input. Show users `inputSchemaSnapshot.fields[].label`, submit `inputRows` with `inputSchemaSnapshot.fields[].key`, and treat `fields[].required` as required input. Do not send `taskInputs`, `workflowDefinition`, `templateSpec`, or hidden Core / TemplateSpec structures to Market buyer execution endpoints.
+
+### Install a template as a local Agent Skill
+
+Local Agent Skills are usage wrappers for existing LoomLoom templates. They teach Codex, Claude Code, or OpenClaw when to use a specific template, what inputs to collect, how to quote/precheck, and how to submit only after explicit confirmation. They do not copy server-side execution logic, hidden prompts, model settings, credentials, or Market internals.
+
+```bash
+# Preview installation data for a confirmation card
+loomloom skill install market <listing-id> \
+  --agent codex \
+  --output-dir /path/to/one-skill-dir \
+  --dry-run \
+  --output json
+
+# Install a Market SkillBot wrapper
+loomloom skill install market <listing-id> \
+  --agent codex \
+  --output-dir /path/to/one-skill-dir
+
+# Install a private template-version wrapper
+loomloom skill install template-spec <template-id> <version-id> \
+  --agent codex \
+  --output-dir /path/to/one-skill-dir
+```
+
+Market Skill wrappers bind to the Listing. The installed listing version is recorded only for traceability; every execution must read the current public Listing and use Market quote/run or Market workbook quote/run. Private template wrappers bind to the exact `template_id + version_id` and do not enter the Market path.
 
 ### Creator: publish and manage a SkillBot
 

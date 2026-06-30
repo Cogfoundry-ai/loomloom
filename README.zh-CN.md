@@ -334,6 +334,15 @@ Orchestration input 文件是 JSONL。对于常见的单根工作流，每个非
 | `loomloom model list --step-type <type>` | 列出某种 step type 可执行的模型。 |
 | `loomloom asset list` | 聚合列出我的私有模板和可用 Market SkillBots；不包含官方模板。 |
 
+### 本地 Agent Skills
+
+| 命令 | 说明 |
+| --- | --- |
+| `loomloom skill install market <listing-id> --agent <agent> --output-dir <skill-dir>` | 为 Market SkillBot listing 生成一个本地 Agent Skill 包装器。 |
+| `loomloom skill install template-spec <template-id> <version-id> --agent <agent> --output-dir <skill-dir>` | 为私有模板版本生成一个本地 Agent Skill 包装器。 |
+
+Agent 需要展示稳定的安装确认预览时，可以先使用 `--dry-run --output json`。Dry-run 不会创建最终的 `--output-dir`，也不会写入 `SKILL.md` / `loomloom-skill.json`；但可能创建并立即删除一个临时 probe 目录来验证可写性。第一阶段里，`--output-dir` 是单个生成 Skill 的目录，不是 Agent 的 skills 根目录。安装只写入本地包装文件；不会执行模板、quote/precheck 成本，也不会产生可计费的模型/API 调用。
+
 ### Market - 买家
 
 | 命令 | 说明 |
@@ -467,6 +476,31 @@ loomloom run result-workbook <run-id> --output-file ./market-result.xlsx
 ```
 
 构造 JSON 输入前，先用 `market show` 查看公开字段和示例。展示给用户看 `inputSchemaSnapshot.fields[].label`，提交时用 `inputSchemaSnapshot.fields[].key` 作为 `inputRows` 的 key，并按 `fields[].required` 做必填。不要向 Market 买方执行接口传 `taskInputs`、`workflowDefinition`、`templateSpec` 或隐藏的 Core / TemplateSpec 内部结构。
+
+### 将模板安装为本地 Agent Skill
+
+本地 Agent Skills 是现有 LoomLoom 模板的使用包装器。它们告诉 Codex、Claude Code 或 OpenClaw 何时使用某个模板、需要收集哪些输入、如何 quote/precheck，以及必须在明确确认后才提交执行。它们不会复制服务端执行逻辑、隐藏 prompt、模型设置、凭证或 Market 内部信息。
+
+```bash
+# 预览安装数据，用于确认卡片
+loomloom skill install market <listing-id> \
+  --agent codex \
+  --output-dir /path/to/one-skill-dir \
+  --dry-run \
+  --output json
+
+# 安装 Market SkillBot 包装器
+loomloom skill install market <listing-id> \
+  --agent codex \
+  --output-dir /path/to/one-skill-dir
+
+# 安装私有模板版本包装器
+loomloom skill install template-spec <template-id> <version-id> \
+  --agent codex \
+  --output-dir /path/to/one-skill-dir
+```
+
+Market Skill 包装器绑定到 Listing。安装时记录的 listing version 只用于追踪来源；每次执行都必须读取当前公开 Listing，并使用 Market quote/run 或 Market workbook quote/run。私有模板包装器绑定精确的 `template_id + version_id`，不会走 Market 路径。
 
 ### 创建者：发布和管理 SkillBot
 

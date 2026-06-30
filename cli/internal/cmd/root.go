@@ -72,6 +72,7 @@ func NewRootCmd() *cobra.Command {
 		newRunCmd(opts),
 		newTemplateCmd(opts),
 		newTemplateSpecCmd(opts),
+		newSkillCmd(opts),
 		newArtifactCmd(opts),
 	)
 	return cmd
