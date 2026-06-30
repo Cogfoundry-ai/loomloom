@@ -3,8 +3,9 @@ package skill
 import "encoding/json"
 
 const (
-	PreviewSchemaVersion  = "loomloom-skill-preview/v1"
-	MetadataSchemaVersion = "loomloom-skill/v1"
+	PreviewSchemaVersion          = "loomloom-skill-preview/v1"
+	UninstallPreviewSchemaVersion = "loomloom-skill-uninstall-preview/v1"
+	MetadataSchemaVersion         = "loomloom-skill/v1"
 
 	SourceMarketListing = "market_listing"
 	SourceUserTemplate  = "user_template"
@@ -31,6 +32,12 @@ type Options struct {
 
 	TemplateID        string
 	TemplateVersionID string
+}
+
+type UninstallOptions struct {
+	Dir    string
+	DryRun bool
+	Force  bool
 }
 
 type Preview struct {
@@ -99,6 +106,28 @@ type InstallResult struct {
 	Metadata  string `json:"metadataFile,omitempty"`
 	SkillFile string `json:"skillFile,omitempty"`
 	Trigger   string `json:"triggerExample,omitempty"`
+}
+
+type UninstallPreview struct {
+	PreviewSchemaVersion string   `json:"previewSchemaVersion"`
+	Removable            bool     `json:"removable"`
+	Dir                  string   `json:"dir"`
+	SkillName            string   `json:"skillName"`
+	DisplayName          string   `json:"displayName,omitempty"`
+	Agent                string   `json:"agent"`
+	SourceType           string   `json:"sourceType,omitempty"`
+	SourceID             string   `json:"sourceId,omitempty"`
+	Warnings             []Issue  `json:"warnings"`
+	Errors               []Issue  `json:"errors"`
+	BlockingReason       string   `json:"blockingReason"`
+	RecommendedAction    string   `json:"recommendedAction"`
+	WillDelete           []string `json:"willDelete"`
+	UnexpectedFiles      []string `json:"unexpectedFiles,omitempty"`
+}
+
+type UninstallResult struct {
+	UninstallPreview
+	Uninstalled bool `json:"uninstalled"`
 }
 
 type TemplateData struct {

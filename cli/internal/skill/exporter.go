@@ -35,6 +35,19 @@ func (e *Exporter) Install(ctx context.Context, opts Options) (*InstallResult, e
 		return nil, err
 	}
 	preview := previewFromData(opts, data)
+	if err := checkOutputDirName(opts.OutputDir, preview.SkillName); err != nil {
+		preview.Installable = false
+		preview.BlockingReason = "output_dir_name_mismatch"
+		preview.RecommendedAction = fmt.Sprintf("Use an output directory whose final path segment is %q.", preview.SkillName)
+		preview.Errors = append(preview.Errors, Issue{
+			Code:    "output_dir_name_mismatch",
+			Message: err.Error(),
+		})
+		if opts.DryRun {
+			return &InstallResult{Preview: preview}, nil
+		}
+		return nil, err
+	}
 	if err := checkOutputDir(opts.OutputDir, opts.DryRun); err != nil {
 		preview.Installable = false
 		if errors.Is(err, ErrOutputDirNotEmpty) {
@@ -102,6 +115,17 @@ func validateOptions(opts Options) error {
 		}
 	default:
 		return fmt.Errorf("unsupported source type %q", opts.SourceType)
+	}
+	return nil
+}
+
+func checkOutputDirName(outputDir string, skillName string) error {
+	base := filepath.Base(filepath.Clean(strings.TrimSpace(outputDir)))
+	if base == "." || base == string(filepath.Separator) || base == "" {
+		return fmt.Errorf("output directory must end with generated skill name %q", skillName)
+	}
+	if base != skillName {
+		return fmt.Errorf("output directory basename %q must match generated skill name %q", base, skillName)
 	}
 	return nil
 }
@@ -618,25 +642,30 @@ func previewFromData(opts Options, data TemplateData) Preview {
 var nonSlugChars = regexp.MustCompile(`[^a-z0-9]+`)
 
 func SkillName(displayName string, fallback string) string {
-	slug := strings.ToLower(strings.TrimSpace(displayName))
-	slug = nonSlugChars.ReplaceAllString(slug, "-")
-	slug = strings.Trim(slug, "-")
+	const prefix = "loomloom-"
+	slug := slugifySkillNamePart(displayName)
 	if slug == "" {
-		fallbackSlug := strings.ToLower(strings.TrimSpace(fallback))
-		fallbackSlug = nonSlugChars.ReplaceAllString(fallbackSlug, "-")
-		fallbackSlug = strings.Trim(fallbackSlug, "-")
-		if fallbackSlug == "" {
-			fallbackSlug = "skill"
-		}
-		slug = "loomloom-" + fallbackSlug
+		slug = slugifySkillNamePart(fallback)
+	}
+	if slug == "" || slug == "loomloom" {
+		slug = "skill"
+	}
+	if !strings.HasPrefix(slug, prefix) {
+		slug = prefix + slug
 	}
 	if len(slug) > 63 {
 		slug = strings.Trim(slug[:63], "-")
 	}
-	if slug == "" {
+	if slug == "" || slug == "loomloom" {
 		return "loomloom-skill"
 	}
 	return slug
+}
+
+func slugifySkillNamePart(value string) string {
+	slug := strings.ToLower(strings.TrimSpace(value))
+	slug = nonSlugChars.ReplaceAllString(slug, "-")
+	return strings.Trim(slug, "-")
 }
 
 func triggerExample(displayName string) string {

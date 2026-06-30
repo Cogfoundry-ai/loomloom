@@ -340,8 +340,11 @@ Monetary values such as `taskFixedFeeT` and `amountT` are in API units, where 10
 | --- | --- |
 | `loomloom skill install market <listing-id> --agent <agent> --output-dir <skill-dir>` | Generate a local agent Skill wrapper for a Market SkillBot listing. |
 | `loomloom skill install template-spec <template-id> <version-id> --agent <agent> --output-dir <skill-dir>` | Generate a local agent Skill wrapper for a private template version. |
+| `loomloom skill uninstall --dir <skill-dir>` | Remove one LoomLoom-generated local agent Skill directory. |
 
-Use `--dry-run --output json` before writing final Skill files when an agent needs a stable installation preview for a confirmation card. Dry-run does not create the final `--output-dir` or write `SKILL.md` / `loomloom-skill.json`; it may create and immediately remove a temporary probe directory to verify writability. In this first phase, `--output-dir` is the directory for one generated Skill, not an agent skills root directory. Installation only writes local wrapper files; it does not execute a template, quote/precheck costs, or create billable model/API usage.
+Use `--dry-run --output json` before writing final Skill files when an agent needs a stable installation preview for a confirmation card. Dry-run does not create the final `--output-dir` or write `SKILL.md` / `loomloom-skill.json`; it may create and immediately remove a temporary probe directory to verify writability. In this first phase, `--output-dir` is the directory for one generated Skill, not an agent skills root directory. Generated Skill names always use the `loomloom-` prefix, and the final `--output-dir` basename must match the previewed `skillName`, for example `/path/to/loomloom-my-skill`. Installation only writes local wrapper files; it does not execute a template, quote/precheck costs, or create billable model/API usage.
+
+For uninstall, use `loomloom skill uninstall --dir <skill-dir> --dry-run --output json` first. The command only removes directories that contain valid LoomLoom skill metadata. If the directory contains extra files, review them and pass `--force` only when you intentionally want to remove the whole directory.
 
 ### Market — buyer
 
@@ -485,19 +488,29 @@ Local Agent Skills are usage wrappers for existing LoomLoom templates. They teac
 # Preview installation data for a confirmation card
 loomloom skill install market <listing-id> \
   --agent codex \
-  --output-dir /path/to/one-skill-dir \
+  --output-dir /path/to/loomloom-one-skill-dir \
   --dry-run \
   --output json
 
 # Install a Market SkillBot wrapper
 loomloom skill install market <listing-id> \
   --agent codex \
-  --output-dir /path/to/one-skill-dir
+  --output-dir /path/to/loomloom-one-skill-dir
 
 # Install a private template-version wrapper
 loomloom skill install template-spec <template-id> <version-id> \
   --agent codex \
-  --output-dir /path/to/one-skill-dir
+  --output-dir /path/to/loomloom-one-skill-dir
+
+# Preview uninstalling a local Agent Skill wrapper
+loomloom skill uninstall \
+  --dir /path/to/loomloom-one-skill-dir \
+  --dry-run \
+  --output json
+
+# Uninstall a local Agent Skill wrapper
+loomloom skill uninstall \
+  --dir /path/to/loomloom-one-skill-dir
 ```
 
 Market Skill wrappers bind to the Listing. The installed listing version is recorded only for traceability; every execution must read the current public Listing and use Market quote/run or Market workbook quote/run. Private template wrappers bind to the exact `template_id + version_id` and do not enter the Market path.

@@ -23,6 +23,7 @@ func newSkillCmd(opts *rootOptions) *cobra.Command {
 		newSkillInstallTemplateSpecCmd(opts),
 	)
 	cmd.AddCommand(install)
+	cmd.AddCommand(newSkillUninstallCmd(opts))
 	return cmd
 }
 
@@ -30,6 +31,12 @@ type skillInstallOptions struct {
 	agent     string
 	outputDir string
 	dryRun    bool
+}
+
+type skillUninstallOptions struct {
+	dir    string
+	dryRun bool
+	force  bool
 }
 
 func addSkillInstallFlags(cmd *cobra.Command, installOpts *skillInstallOptions) {
@@ -171,6 +178,108 @@ func printSkillInstallResult(w interface {
 	}
 	if result.Trigger != "" {
 		if _, err := fmt.Fprintf(w, "trigger_example\t%s\n", result.Trigger); err != nil {
+			return err
+		}
+	}
+	for _, warning := range result.Warnings {
+		if _, err := fmt.Fprintf(w, "warning\t%s\t%s\n", warning.Code, warning.Message); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func newSkillUninstallCmd(opts *rootOptions) *cobra.Command {
+	uninstallOpts := &skillUninstallOptions{}
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Uninstall one local LoomLoom agent skill directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := skill.Uninstall(skill.UninstallOptions{
+				Dir:    strings.TrimSpace(uninstallOpts.dir),
+				DryRun: uninstallOpts.dryRun,
+				Force:  uninstallOpts.force,
+			})
+			if err != nil {
+				return err
+			}
+			if opts.output == "json" {
+				return writeIndentedJSON(cmd.OutOrStdout(), result)
+			}
+			if uninstallOpts.dryRun {
+				return printSkillUninstallPreview(cmd.OutOrStdout(), result)
+			}
+			return printSkillUninstallResult(cmd.OutOrStdout(), result)
+		},
+	}
+	cmd.Flags().StringVar(&uninstallOpts.dir, "dir", "", "Directory of one generated LoomLoom skill to uninstall")
+	cmd.Flags().BoolVar(&uninstallOpts.dryRun, "dry-run", false, "Validate and preview without deleting files")
+	cmd.Flags().BoolVar(&uninstallOpts.force, "force", false, "Remove a LoomLoom skill directory even when it contains unexpected files")
+	return cmd
+}
+
+func printSkillUninstallPreview(w interface {
+	Write([]byte) (int, error)
+}, result *skill.UninstallResult) error {
+	if _, err := fmt.Fprintf(w, "removable\t%t\nskill_name\t%s\nagent\t%s\ndir\t%s\n", result.Removable, result.SkillName, result.Agent, result.Dir); err != nil {
+		return err
+	}
+	if result.DisplayName != "" {
+		if _, err := fmt.Fprintf(w, "display_name\t%s\n", result.DisplayName); err != nil {
+			return err
+		}
+	}
+	if result.SourceType != "" {
+		if _, err := fmt.Fprintf(w, "source_type\t%s\n", result.SourceType); err != nil {
+			return err
+		}
+	}
+	if result.SourceID != "" {
+		if _, err := fmt.Fprintf(w, "source_id\t%s\n", result.SourceID); err != nil {
+			return err
+		}
+	}
+	for _, path := range result.WillDelete {
+		if _, err := fmt.Fprintf(w, "will_delete\t%s\n", path); err != nil {
+			return err
+		}
+	}
+	for _, warning := range result.Warnings {
+		if _, err := fmt.Fprintf(w, "warning\t%s\t%s\n", warning.Code, warning.Message); err != nil {
+			return err
+		}
+	}
+	for _, issue := range result.Errors {
+		if _, err := fmt.Fprintf(w, "error\t%s\t%s\n", issue.Code, issue.Message); err != nil {
+			return err
+		}
+	}
+	if result.BlockingReason != "" {
+		if _, err := fmt.Fprintf(w, "blocking_reason\t%s\nrecommended_action\t%s\n", result.BlockingReason, result.RecommendedAction); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func printSkillUninstallResult(w interface {
+	Write([]byte) (int, error)
+}, result *skill.UninstallResult) error {
+	if _, err := fmt.Fprintf(w, "uninstalled\t%t\nskill_name\t%s\nagent\t%s\ndir\t%s\n", result.Uninstalled, result.SkillName, result.Agent, result.Dir); err != nil {
+		return err
+	}
+	if result.DisplayName != "" {
+		if _, err := fmt.Fprintf(w, "display_name\t%s\n", result.DisplayName); err != nil {
+			return err
+		}
+	}
+	if result.SourceType != "" {
+		if _, err := fmt.Fprintf(w, "source_type\t%s\n", result.SourceType); err != nil {
+			return err
+		}
+	}
+	if result.SourceID != "" {
+		if _, err := fmt.Fprintf(w, "source_id\t%s\n", result.SourceID); err != nil {
 			return err
 		}
 	}

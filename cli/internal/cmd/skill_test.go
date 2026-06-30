@@ -42,7 +42,7 @@ func TestSkillInstallMarketDryRunOutputsPreviewAndDoesNotWrite(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-prd-review")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"--output", "json",
@@ -70,7 +70,7 @@ func TestSkillInstallMarketDryRunOutputsPreviewAndDoesNotWrite(t *testing.T) {
 	if payload["installable"] != true {
 		t.Fatalf("installable=%v", payload["installable"])
 	}
-	if payload["skillName"] != "prd-review" {
+	if payload["skillName"] != "loomloom-prd-review" {
 		t.Fatalf("skillName=%v", payload["skillName"])
 	}
 }
@@ -96,7 +96,7 @@ func TestSkillInstallMarketWritesConcreteListingID(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-prd-review")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"skill", "install", "market", "listing-1",
@@ -137,7 +137,7 @@ func TestSkillInstallTemplateSpecWritesFiles(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-internal-report")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"skill", "install", "template-spec", "tmpl-1", "ver-1",
@@ -177,6 +177,9 @@ func TestSkillInstallTemplateSpecWritesFiles(t *testing.T) {
 	if metadata["source_id"] != "tmpl-1:ver-1" {
 		t.Fatalf("source_id=%v", metadata["source_id"])
 	}
+	if metadata["skill_name"] != "loomloom-internal-report" {
+		t.Fatalf("skill_name=%v", metadata["skill_name"])
+	}
 }
 
 func TestSkillInstallTemplateSpecUsesRequestedVersionSchema(t *testing.T) {
@@ -199,7 +202,7 @@ func TestSkillInstallTemplateSpecUsesRequestedVersionSchema(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-versioned-report")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"skill", "install", "template-spec", "tmpl-1", "ver-1",
@@ -241,7 +244,7 @@ func TestSkillInstallTemplateSpecRequiresVersionObject(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-versioned-report")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"skill", "install", "template-spec", "tmpl-1", "ver-1",
@@ -275,7 +278,7 @@ func TestSkillInstallTemplateSpecPrefersDirectVersionSchema(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-versioned-report")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"skill", "install", "template-spec", "tmpl-1", "ver-1",
@@ -317,7 +320,7 @@ func TestSkillInstallTemplateSpecWorkbookOnlyDryRunWarns(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-workbook-only")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"--output", "json",
@@ -363,7 +366,7 @@ func TestSkillInstallTemplateSpecWorkbookOnlyInstallWarns(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-workbook-only")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"skill", "install", "template-spec", "tmpl-1", "ver-1",
@@ -421,7 +424,7 @@ func TestSkillInstallDryRunConflictReturnsStructuredError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	outputDir := filepath.Join(t.TempDir(), "skill")
+	outputDir := filepath.Join(t.TempDir(), "loomloom-prd-review")
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -477,7 +480,7 @@ func TestSkillInstallDryRunMissingParentIsOutputDirError(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&bytes.Buffer{})
-	outputDir := filepath.Join(t.TempDir(), "missing-parent", "skill")
+	outputDir := filepath.Join(t.TempDir(), "missing-parent", "loomloom-prd-review")
 	cmd.SetArgs([]string{
 		"--server", server.URL + "/loom/v1",
 		"--output", "json",
@@ -502,4 +505,250 @@ func TestSkillInstallDryRunMissingParentIsOutputDirError(t *testing.T) {
 	if payload["blockingReason"] != "output_dir_unavailable" {
 		t.Fatalf("blockingReason=%v", payload["blockingReason"])
 	}
+}
+
+func TestSkillInstallDryRunOutputDirMustMatchGeneratedSkillName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"id":"listing-1",
+			"displayName":"PRD Review",
+			"status":"published",
+			"listingVersionId":"lv-1",
+			"saleStatus":"listed",
+			"executionAvailabilityStatus":"available",
+			"inputSchemaSnapshot":"{\"fields\":[{\"key\":\"prompt\",\"label\":\"Prompt\",\"required\":true}]}"
+		}`))
+	}))
+	defer server.Close()
+
+	out := bytes.Buffer{}
+	cmd := NewRootCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	outputDir := filepath.Join(t.TempDir(), "prd-review")
+	cmd.SetArgs([]string{
+		"--server", server.URL + "/loom/v1",
+		"--output", "json",
+		"skill", "install", "market", "listing-1",
+		"--agent", "codex",
+		"--output-dir", outputDir,
+		"--dry-run",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("dry-run name mismatch should return structured preview, got err=%v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if payload["installable"] != false {
+		t.Fatalf("installable=%v", payload["installable"])
+	}
+	if payload["skillName"] != "loomloom-prd-review" {
+		t.Fatalf("skillName=%v", payload["skillName"])
+	}
+	if payload["blockingReason"] != "output_dir_name_mismatch" {
+		t.Fatalf("blockingReason=%v", payload["blockingReason"])
+	}
+}
+
+func TestSkillUninstallDryRunOutputsPreviewAndDoesNotDelete(t *testing.T) {
+	skillDir := writeInstalledSkillDir(t, false)
+
+	out := bytes.Buffer{}
+	cmd := NewRootCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"--output", "json",
+		"skill", "uninstall",
+		"--dir", skillDir,
+		"--dry-run",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("skill uninstall dry-run error = %v", err)
+	}
+	if _, err := os.Stat(skillDir); err != nil {
+		t.Fatalf("dry-run removed skill dir: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("decode output: %v\n%s", err, out.String())
+	}
+	if payload["previewSchemaVersion"] != "loomloom-skill-uninstall-preview/v1" {
+		t.Fatalf("previewSchemaVersion=%v", payload["previewSchemaVersion"])
+	}
+	if payload["removable"] != true {
+		t.Fatalf("removable=%v", payload["removable"])
+	}
+	if payload["skillName"] != "test-skill" {
+		t.Fatalf("skillName=%v", payload["skillName"])
+	}
+}
+
+func TestSkillUninstallRemovesDirectory(t *testing.T) {
+	skillDir := writeInstalledSkillDir(t, false)
+
+	out := bytes.Buffer{}
+	cmd := NewRootCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"skill", "uninstall",
+		"--dir", skillDir,
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("skill uninstall error = %v", err)
+	}
+	if _, err := os.Stat(skillDir); !os.IsNotExist(err) {
+		t.Fatalf("skill dir still exists, stat err=%v", err)
+	}
+	if !strings.Contains(out.String(), "uninstalled\ttrue") ||
+		!strings.Contains(out.String(), "skill_name\ttest-skill") {
+		t.Fatalf("unexpected uninstall output:\n%s", out.String())
+	}
+}
+
+func TestSkillUninstallMissingMetadataDryRunBlocks(t *testing.T) {
+	skillDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := bytes.Buffer{}
+	cmd := NewRootCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"--output", "json",
+		"skill", "uninstall",
+		"--dir", skillDir,
+		"--dry-run",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("dry-run should return structured preview, got err=%v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("decode output: %v\n%s", err, out.String())
+	}
+	if payload["removable"] != false {
+		t.Fatalf("removable=%v", payload["removable"])
+	}
+	if payload["blockingReason"] != "metadata_missing" {
+		t.Fatalf("blockingReason=%v", payload["blockingReason"])
+	}
+}
+
+func TestSkillUninstallMissingDirDryRunOutputsStructuredPreview(t *testing.T) {
+	out := bytes.Buffer{}
+	cmd := NewRootCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"--output", "json",
+		"skill", "uninstall",
+		"--dry-run",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("dry-run should return structured preview, got err=%v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("decode output: %v\n%s", err, out.String())
+	}
+	if payload["removable"] != false {
+		t.Fatalf("removable=%v", payload["removable"])
+	}
+	if payload["blockingReason"] != "dir_required" {
+		t.Fatalf("blockingReason=%v", payload["blockingReason"])
+	}
+}
+
+func TestSkillUninstallUnexpectedFilesRequireForce(t *testing.T) {
+	skillDir := writeInstalledSkillDir(t, true)
+
+	out := bytes.Buffer{}
+	cmd := NewRootCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"--output", "json",
+		"skill", "uninstall",
+		"--dir", skillDir,
+		"--dry-run",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("dry-run should return structured preview, got err=%v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("decode output: %v\n%s", err, out.String())
+	}
+	if payload["removable"] != false {
+		t.Fatalf("removable=%v", payload["removable"])
+	}
+	if payload["blockingReason"] != "unexpected_files" {
+		t.Fatalf("blockingReason=%v", payload["blockingReason"])
+	}
+	if _, err := os.Stat(skillDir); err != nil {
+		t.Fatalf("dry-run removed skill dir: %v", err)
+	}
+}
+
+func TestSkillUninstallForceRemovesUnexpectedFiles(t *testing.T) {
+	skillDir := writeInstalledSkillDir(t, true)
+
+	out := bytes.Buffer{}
+	cmd := NewRootCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"--output", "json",
+		"skill", "uninstall",
+		"--dir", skillDir,
+		"--force",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("skill uninstall --force error = %v", err)
+	}
+	if _, err := os.Stat(skillDir); !os.IsNotExist(err) {
+		t.Fatalf("skill dir still exists, stat err=%v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("decode output: %v\n%s", err, out.String())
+	}
+	if payload["uninstalled"] != true {
+		t.Fatalf("uninstalled=%v", payload["uninstalled"])
+	}
+}
+
+func writeInstalledSkillDir(t *testing.T, extraFile bool) string {
+	t.Helper()
+	skillDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Test Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	metadata := `{
+		"schema_version":"loomloom-skill/v1",
+		"generated_by":"loomloom-cli",
+		"source_type":"market_listing",
+		"agent":"codex",
+		"generated_at":"2026-06-30T00:00:00Z",
+		"skill_name":"test-skill",
+		"display_name":"Test Skill",
+		"source_id":"listing-1",
+		"input_schema_mode":"schema",
+		"listing_id":"listing-1"
+	}`
+	if err := os.WriteFile(filepath.Join(skillDir, "loomloom-skill.json"), []byte(metadata), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if extraFile {
+		if err := os.WriteFile(filepath.Join(skillDir, "notes.txt"), []byte("keep me"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return skillDir
 }

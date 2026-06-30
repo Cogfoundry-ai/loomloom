@@ -340,8 +340,11 @@ Orchestration input 文件是 JSONL。对于常见的单根工作流，每个非
 | --- | --- |
 | `loomloom skill install market <listing-id> --agent <agent> --output-dir <skill-dir>` | 为 Market SkillBot listing 生成一个本地 Agent Skill 包装器。 |
 | `loomloom skill install template-spec <template-id> <version-id> --agent <agent> --output-dir <skill-dir>` | 为私有模板版本生成一个本地 Agent Skill 包装器。 |
+| `loomloom skill uninstall --dir <skill-dir>` | 删除一个 LoomLoom 生成的本地 Agent Skill 目录。 |
 
-Agent 需要展示稳定的安装确认预览时，可以先使用 `--dry-run --output json`。Dry-run 不会创建最终的 `--output-dir`，也不会写入 `SKILL.md` / `loomloom-skill.json`；但可能创建并立即删除一个临时 probe 目录来验证可写性。第一阶段里，`--output-dir` 是单个生成 Skill 的目录，不是 Agent 的 skills 根目录。安装只写入本地包装文件；不会执行模板、quote/precheck 成本，也不会产生可计费的模型/API 调用。
+Agent 需要展示稳定的安装确认预览时，可以先使用 `--dry-run --output json`。Dry-run 不会创建最终的 `--output-dir`，也不会写入 `SKILL.md` / `loomloom-skill.json`；但可能创建并立即删除一个临时 probe 目录来验证可写性。第一阶段里，`--output-dir` 是单个生成 Skill 的目录，不是 Agent 的 skills 根目录。生成的 Skill 名统一使用 `loomloom-` 前缀，最终 `--output-dir` 的目录名必须和预览里的 `skillName` 一致，例如 `/path/to/loomloom-my-skill`。安装只写入本地包装文件；不会执行模板、quote/precheck 成本，也不会产生可计费的模型/API 调用。
+
+卸载时先使用 `loomloom skill uninstall --dir <skill-dir> --dry-run --output json` 预览。该命令只会删除包含有效 LoomLoom skill metadata 的目录。如果目录里有额外文件，需要先确认这些文件可以一起删除，再传 `--force`。
 
 ### Market - 买家
 
@@ -485,19 +488,29 @@ loomloom run result-workbook <run-id> --output-file ./market-result.xlsx
 # 预览安装数据，用于确认卡片
 loomloom skill install market <listing-id> \
   --agent codex \
-  --output-dir /path/to/one-skill-dir \
+  --output-dir /path/to/loomloom-one-skill-dir \
   --dry-run \
   --output json
 
 # 安装 Market SkillBot 包装器
 loomloom skill install market <listing-id> \
   --agent codex \
-  --output-dir /path/to/one-skill-dir
+  --output-dir /path/to/loomloom-one-skill-dir
 
 # 安装私有模板版本包装器
 loomloom skill install template-spec <template-id> <version-id> \
   --agent codex \
-  --output-dir /path/to/one-skill-dir
+  --output-dir /path/to/loomloom-one-skill-dir
+
+# 预览卸载本地 Agent Skill 包装器
+loomloom skill uninstall \
+  --dir /path/to/loomloom-one-skill-dir \
+  --dry-run \
+  --output json
+
+# 卸载本地 Agent Skill 包装器
+loomloom skill uninstall \
+  --dir /path/to/loomloom-one-skill-dir
 ```
 
 Market Skill 包装器绑定到 Listing。安装时记录的 listing version 只用于追踪来源；每次执行都必须读取当前公开 Listing，并使用 Market quote/run 或 Market workbook quote/run。私有模板包装器绑定精确的 `template_id + version_id`，不会走 Market 路径。
