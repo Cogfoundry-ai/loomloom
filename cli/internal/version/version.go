@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,7 +49,7 @@ func CheckLatest(ctx context.Context) (*Status, error) {
 	}
 	status.CurrentChannel = ReleaseChannel(status.CurrentVersion)
 
-	latest, err := fetchLatestVersion(ctx, releaseAPIURL())
+	latest, err := resolveLatestVersion(ctx)
 	if err != nil {
 		return status, err
 	}
@@ -86,11 +87,67 @@ func ReleaseChannel(raw string) string {
 	}
 }
 
-func releaseAPIURL() string {
+// resolveLatestVersion finds the latest stable release tag. It prefers the git
+// protocol (git ls-remote), which is not subject to the GitHub REST API rate
+// limit, and falls back to the REST API when git is unavailable. An explicit
+// release-API override env var forces the REST API path.
+func resolveLatestVersion(ctx context.Context) (string, error) {
+	if releaseAPIOverride() != "" {
+		return fetchLatestVersion(ctx, releaseAPIURL())
+	}
+	if tag, err := fetchLatestVersionViaGit(ctx); err == nil && tag != "" {
+		return tag, nil
+	}
+	return fetchLatestVersion(ctx, releaseAPIURL())
+}
+
+// fetchLatestVersionViaGit lists tags via `git ls-remote` and returns the
+// highest stable version tag (vX.Y.Z, no prerelease suffix).
+func fetchLatestVersionViaGit(ctx context.Context) (string, error) {
+	if _, err := exec.LookPath("git"); err != nil {
+		return "", fmt.Errorf("git not available: %w", err)
+	}
+	// Cap the git lookup to the same budget as the HTTP path so a slow network
+	// never makes this non-critical version check hang.
+	gitCtx, cancel := context.WithTimeout(ctx, defaultHTTPTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(gitCtx, "git", "ls-remote", "--tags", "--refs",
+		"https://github.com/"+repoOwnerRepo+".git")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git ls-remote: %w", err)
+	}
+
+	best := ""
+	for _, line := range strings.Split(string(out), "\n") {
+		idx := strings.Index(line, "refs/tags/")
+		if idx < 0 {
+			continue
+		}
+		tag := strings.TrimSpace(line[idx+len("refs/tags/"):])
+		parsed, ok := parseSemver(tag)
+		if !ok || parsed.prerelease != "" {
+			continue // stable releases only
+		}
+		if best == "" || compareVersions(tag, best) == 1 {
+			best = tag
+		}
+	}
+	if best == "" {
+		return "", fmt.Errorf("no stable release tag found via git")
+	}
+	return best, nil
+}
+
+func releaseAPIOverride() string {
 	if v := strings.TrimSpace(os.Getenv("LOOMLOOM_CLI_RELEASE_API")); v != "" {
 		return v
 	}
-	if v := strings.TrimSpace(os.Getenv("BATCHJOB_CLI_RELEASE_API")); v != "" {
+	return strings.TrimSpace(os.Getenv("BATCHJOB_CLI_RELEASE_API"))
+}
+
+func releaseAPIURL() string {
+	if v := releaseAPIOverride(); v != "" {
 		return v
 	}
 	return defaultReleaseAPI
