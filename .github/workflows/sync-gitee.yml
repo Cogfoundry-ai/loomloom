@@ -30,7 +30,7 @@ jobs:
             exit 1
           fi
 
-      - name: Sync release tag to Gitee
+      - name: Sync main and release tag to Gitee
         env:
           GITEE_SYNC_TOKEN: ${{ secrets.GITEE_SYNC_TOKEN }}
           GITEE_REPOSITORY: cogfoundry/loomloom
@@ -46,6 +46,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git remote add gitee "https://oauth2:${GITEE_SYNC_TOKEN}@gitee.com/${GITEE_REPOSITORY}.git"
+          git push --force gitee "HEAD:refs/heads/main"
           git push gitee "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
 
-          echo "synced ${GITHUB_REF_NAME} to https://gitee.com/${GITEE_REPOSITORY}"
+          echo "synced main and ${GITHUB_REF_NAME} to https://gitee.com/${GITEE_REPOSITORY}"
