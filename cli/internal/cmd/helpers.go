@@ -250,6 +250,31 @@ func stringMapValue(values map[string]any, key string) string {
 	return trimmed
 }
 
+// int64MapValue reads an integer-valued field from a decoded JSON map. JSON
+// numbers decode as float64, so this also tolerates a string encoding.
+func int64MapValue(values map[string]any, key string) (int64, bool) {
+	value, ok := values[key]
+	if !ok || value == nil {
+		return 0, false
+	}
+	switch v := value.(type) {
+	case float64:
+		return int64(v), true
+	case string:
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			return 0, false
+		}
+		var parsed int64
+		if _, err := fmt.Sscan(trimmed, &parsed); err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
+}
+
 func formatUnix(ts int64) string {
 	if ts <= 0 {
 		return "-"
@@ -280,6 +305,24 @@ func formatMoney(amountT int64, currency string) string {
 	}
 	value := new(big.Rat).SetFrac(big.NewInt(amountT), big.NewInt(10_000_000))
 	return currency + " " + sign + value.FloatString(4)
+}
+
+// formatMoneyT converts a raw *T amount (10,000,000 T = 1 currency unit) into
+// a human-readable string at 7-decimal precision. When currency is empty, it
+// does not guess a currency and instead marks the amount as unknown.
+func formatMoneyT(amountT int64, currency string) string {
+	currency = strings.TrimSpace(currency)
+	sign := ""
+	displayAmount := amountT
+	if displayAmount < 0 {
+		sign = "-"
+		displayAmount = -displayAmount
+	}
+	value := new(big.Rat).SetFrac(big.NewInt(displayAmount), big.NewInt(10_000_000))
+	if currency == "" {
+		return fmt.Sprintf("(currency unknown) %d", amountT)
+	}
+	return strings.ToUpper(currency) + " " + sign + value.FloatString(7)
 }
 
 func isTerminalRunStatus(status string) bool {

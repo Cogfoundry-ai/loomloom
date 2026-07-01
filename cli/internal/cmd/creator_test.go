@@ -47,3 +47,66 @@ func TestCreatorEarningsUsesTokenPrincipal(t *testing.T) {
 		t.Fatalf("unexpected output: %s", out.String())
 	}
 }
+
+func TestCreatorTransactionsTextShowsFormattedAmountsWithoutEarnings(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"items":[{
+				"runTransactionId":"rt-1",
+				"listingId":"listing-1",
+				"skillName":"Writer",
+				"taskFixedFeeT":5000000,
+				"finalBuyerPayableT":9800000,
+				"creatorNetEarningT":4500000,
+				"transactionStatus":"settled"
+			}],
+			"totalCount":1
+		}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newCreatorTransactionsCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("creator transactions command error = %v", err)
+	}
+	for _, want := range []string{
+		"(currency unknown) 5000000",
+		"(currency unknown) 9800000",
+		"rt-1",
+		"settled",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+	if strings.Contains(out.String(), "4500000") {
+		t.Fatalf("output=%s must not show creator net earning to buyers", out.String())
+	}
+}
+
+func TestCreatorTransactionsJSONPreservesRawFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"runTransactionId":"rt-1","taskFixedFeeT":5000000,"creatorNetEarningT":4500000}],"totalCount":1}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second, output: "json"}
+	cmd := newCreatorTransactionsCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("creator transactions command error = %v", err)
+	}
+	for _, want := range []string{`"taskFixedFeeT": 5000000`, `"creatorNetEarningT": 4500000`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}

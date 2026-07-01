@@ -162,7 +162,7 @@ Read `market show` first to understand public fields and examples. Use `fields[]
 - `loomloom creator review list`, `loomloom creator review get <review-request-id>`, `loomloom creator review withdraw <review-request-id>` — track and withdraw review requests directly.
 - `loomloom creator earnings` and `loomloom creator transactions` — review creator income and per-call settlement.
 
-All `*FeeT`, `*CostT`, `*AmountT`, and `*PayableT` values are in API units where 10,000,000 units equal 1 currency unit.
+All `*FeeT`, `*CostT`, `*AmountT`, and `*PayableT` values are in API units where 10,000,000 units equal 1 currency unit. The CLI's default text output for Market and usage commands already converts these to human-readable amounts (e.g. `CNY 0.5000000`) while still printing the raw `*T` value; `--output json` always returns the raw `*T` fields unchanged.
 
 ## Submission Confirmation Rule
 

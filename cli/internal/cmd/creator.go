@@ -3,11 +3,35 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
+
+// creatorTransactionSummary mirrors the backend creatorMarketTransactionResponse
+// returned by /creators/me/marketTransactions. It intentionally omits
+// creatorNetEarningT and creatorEarning: those are creator-earnings-specific
+// fields shown only via the `creator earnings` command.
+type creatorTransactionSummary struct {
+	RunTransactionID        string    `json:"runTransactionId"`
+	RunID                   string    `json:"runId"`
+	ListingID               string    `json:"listingId"`
+	ListingVersionID        string    `json:"listingVersionId"`
+	SkillName               string    `json:"skillName"`
+	TaskFixedFeeT           flexInt64 `json:"taskFixedFeeT"`
+	EstimatedExecutionCostT flexInt64 `json:"estimatedExecutionCostT"`
+	EstimatedBuyerPayableT  flexInt64 `json:"estimatedBuyerPayableT"`
+	ActualExecutionCostT    flexInt64 `json:"actualExecutionCostT"`
+	FinalBuyerPayableT      flexInt64 `json:"finalBuyerPayableT"`
+	TransactionStatus       string    `json:"transactionStatus"`
+}
+
+type creatorTransactionsListResponse struct {
+	Items      []creatorTransactionSummary `json:"items"`
+	TotalCount int                         `json:"totalCount"`
+}
 
 func newCreatorCmd(opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
@@ -70,15 +94,54 @@ func newCreatorTransactionsCmd(opts *rootOptions) *cobra.Command {
 				query.Set("pageSize", fmt.Sprintf("%d", pageSize))
 			}
 
-			var resp map[string]any
-			if err := httpClient.GetProductJSONWithQuery(ctx, "/creators/me/marketTransactions", query, &resp); err != nil {
+			var raw map[string]any
+			if err := httpClient.GetProductJSONWithQuery(ctx, "/creators/me/marketTransactions", query, &raw); err != nil {
 				return err
 			}
-			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+			if opts.output == "json" {
+				return writeIndentedJSON(cmd.OutOrStdout(), raw)
+			}
+			resp, err := decodeJSONValue[creatorTransactionsListResponse](raw)
+			if err != nil {
+				return err
+			}
+			return printCreatorTransactions(cmd.OutOrStdout(), resp)
 		},
 	}
 	cmd.Flags().IntVar(&pageSize, "page-size", 0, "Page size")
 	return cmd
+}
+
+func printCreatorTransactions(w io.Writer, resp creatorTransactionsListResponse) error {
+	if len(resp.Items) == 0 {
+		_, err := fmt.Fprintln(w, "no creator transactions")
+		return err
+	}
+	tw := newTabWriter(w)
+	if _, err := fmt.Fprintln(tw, "run_transaction_id\tlisting_id\tskill_name\ttask_fixed_fee\ttask_fixed_fee_t\tfinal_payable\tfinal_payable_t\tstatus"); err != nil {
+		return err
+	}
+	for _, item := range resp.Items {
+		if _, err := fmt.Fprintf(
+			tw,
+			"%s\t%s\t%s\t%s\t%d\t%s\t%d\t%s\n",
+			item.RunTransactionID,
+			item.ListingID,
+			oneLine(item.SkillName),
+			formatMoneyT(int64(item.TaskFixedFeeT), ""),
+			int64(item.TaskFixedFeeT),
+			formatMoneyT(int64(item.FinalBuyerPayableT), ""),
+			int64(item.FinalBuyerPayableT),
+			oneLine(item.TransactionStatus),
+		); err != nil {
+			return err
+		}
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(w, "total_count\t%d\n", resp.TotalCount)
+	return err
 }
 
 func newCreatorReviewCmd(opts *rootOptions) *cobra.Command {

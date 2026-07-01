@@ -3,12 +3,56 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
+
+// creatorMarketListingResponse mirrors the backend marketListingResponse
+// returned by /creators/me/marketListings endpoints. It carries no currency
+// field, so its money fields are always displayed as currency-unknown.
+type creatorMarketListingResponse struct {
+	ID                          string    `json:"id"`
+	DisplayName                 string    `json:"displayName"`
+	Description                 string    `json:"description"`
+	Status                      string    `json:"status"`
+	PublishedVersionID          string    `json:"publishedVersionId"`
+	ListingVersionID            string    `json:"listingVersionId"`
+	ReviewStatus                string    `json:"reviewStatus"`
+	ReviewReason                string    `json:"reviewReason"`
+	TaskFixedFeeT               flexInt64 `json:"taskFixedFeeT"`
+	SaleStatus                  string    `json:"saleStatus"`
+	ExecutionAvailabilityStatus string    `json:"executionAvailabilityStatus"`
+}
+
+type creatorMarketListingsResponse struct {
+	Items         []creatorMarketListingResponse `json:"items"`
+	NextPageToken string                         `json:"nextPageToken,omitempty"`
+}
+
+type creatorMarketListingVersionResponse struct {
+	ID                          string    `json:"id"`
+	ListingID                   string    `json:"listingId"`
+	VersionNumber               flexInt64 `json:"versionNumber"`
+	Status                      string    `json:"status"`
+	SaleStatus                  string    `json:"saleStatus"`
+	ExecutionAvailabilityStatus string    `json:"executionAvailabilityStatus"`
+	ExecutionBlockReason        string    `json:"executionBlockReason"`
+	ReviewStatus                string    `json:"reviewStatus"`
+	ReviewReason                string    `json:"reviewReason"`
+	TaskFixedFeeT               flexInt64 `json:"taskFixedFeeT"`
+	CreatedAtUnix               flexInt64 `json:"createdAtUnix"`
+}
+
+// creatorMarketListingVersionsResponse mirrors the backend
+// marketListingVersionsResponse, which is not paginated beyond its pageSize
+// limit and returns no continuation token.
+type creatorMarketListingVersionsResponse struct {
+	Items []creatorMarketListingVersionResponse `json:"items"`
+}
 
 func newListingCmd(opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
@@ -110,11 +154,18 @@ func newListingListCmd(opts *rootOptions) *cobra.Command {
 				query.Set("orderBy", strings.TrimSpace(orderBy))
 			}
 
-			var resp map[string]any
-			if err := httpClient.GetProductJSONWithQuery(ctx, "/creators/me/marketListings", query, &resp); err != nil {
+			var raw map[string]any
+			if err := httpClient.GetProductJSONWithQuery(ctx, "/creators/me/marketListings", query, &raw); err != nil {
 				return err
 			}
-			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+			if opts.output == "json" {
+				return writeIndentedJSON(cmd.OutOrStdout(), raw)
+			}
+			resp, err := decodeJSONValue[creatorMarketListingsResponse](raw)
+			if err != nil {
+				return err
+			}
+			return printCreatorListings(cmd.OutOrStdout(), resp)
 		},
 	}
 	cmd.Flags().StringVar(&keyword, "keyword", "", "Search keyword")
@@ -138,11 +189,18 @@ func newListingShowCmd(opts *rootOptions) *cobra.Command {
 			defer cancel()
 
 			path := "/creators/me/marketListings/" + url.PathEscape(strings.TrimSpace(args[0]))
-			var resp map[string]any
-			if err := httpClient.GetProductJSON(ctx, path, &resp); err != nil {
+			var raw map[string]any
+			if err := httpClient.GetProductJSON(ctx, path, &raw); err != nil {
 				return err
 			}
-			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+			if opts.output == "json" {
+				return writeIndentedJSON(cmd.OutOrStdout(), raw)
+			}
+			resp, err := decodeJSONValue[creatorMarketListingResponse](raw)
+			if err != nil {
+				return err
+			}
+			return printCreatorListingDetail(cmd.OutOrStdout(), resp)
 		},
 	}
 }
@@ -167,11 +225,18 @@ func newListingVersionsCmd(opts *rootOptions) *cobra.Command {
 			}
 
 			path := "/creators/me/marketListings/" + url.PathEscape(strings.TrimSpace(args[0])) + "/versions"
-			var resp map[string]any
-			if err := httpClient.GetProductJSONWithQuery(ctx, path, query, &resp); err != nil {
+			var raw map[string]any
+			if err := httpClient.GetProductJSONWithQuery(ctx, path, query, &raw); err != nil {
 				return err
 			}
-			return writeIndentedJSON(cmd.OutOrStdout(), resp)
+			if opts.output == "json" {
+				return writeIndentedJSON(cmd.OutOrStdout(), raw)
+			}
+			resp, err := decodeJSONValue[creatorMarketListingVersionsResponse](raw)
+			if err != nil {
+				return err
+			}
+			return printCreatorListingVersions(cmd.OutOrStdout(), resp)
 		},
 	}
 	cmd.Flags().IntVar(&pageSize, "page-size", 0, "Page size")
@@ -322,4 +387,127 @@ func newListingUnlistCmd(opts *rootOptions) *cobra.Command {
 
 func newListingRelistCmd(opts *rootOptions) *cobra.Command {
 	return newMarketSaleStatusCmd(opts, "relist", "Restore a previously unlisted Market SkillBot listing", "list")
+}
+
+func printCreatorListings(w io.Writer, resp creatorMarketListingsResponse) error {
+	if len(resp.Items) == 0 {
+		if _, err := fmt.Fprintln(w, "no market listings"); err != nil {
+			return err
+		}
+		if resp.NextPageToken != "" {
+			_, err := fmt.Fprintf(w, "next_page_token\t%s\n", resp.NextPageToken)
+			return err
+		}
+		return nil
+	}
+	tw := newTabWriter(w)
+	if _, err := fmt.Fprintln(tw, "id\tname\ttask_fixed_fee\ttask_fixed_fee_t\tstatus\tsale_status\texecution_availability_status\treview_status\tversion"); err != nil {
+		return err
+	}
+	for _, item := range resp.Items {
+		if _, err := fmt.Fprintf(
+			tw,
+			"%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+			item.ID,
+			oneLine(item.DisplayName),
+			formatMoneyT(int64(item.TaskFixedFeeT), ""),
+			int64(item.TaskFixedFeeT),
+			oneLine(item.Status),
+			oneLine(item.SaleStatus),
+			oneLine(item.ExecutionAvailabilityStatus),
+			oneLine(item.ReviewStatus),
+			oneLine(item.ListingVersionID),
+		); err != nil {
+			return err
+		}
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	if resp.NextPageToken != "" {
+		_, err := fmt.Fprintf(w, "next_page_token\t%s\n", resp.NextPageToken)
+		return err
+	}
+	return nil
+}
+
+func printCreatorListingDetail(w io.Writer, listing creatorMarketListingResponse) error {
+	tw := newTabWriter(w)
+	for _, row := range [][2]string{
+		{"id", listing.ID},
+		{"display_name", listing.DisplayName},
+		{"description", listing.Description},
+		{"status", listing.Status},
+		{"published_version_id", listing.PublishedVersionID},
+		{"listing_version_id", listing.ListingVersionID},
+		{"review_status", listing.ReviewStatus},
+		{"review_reason", listing.ReviewReason},
+		{"task_fixed_fee", formatMoneyT(int64(listing.TaskFixedFeeT), "")},
+		{"task_fixed_fee_t", fmt.Sprintf("%d", int64(listing.TaskFixedFeeT))},
+		{"sale_status", listing.SaleStatus},
+		{"execution_availability_status", listing.ExecutionAvailabilityStatus},
+	} {
+		if row[1] == "" {
+			continue
+		}
+		if _, err := fmt.Fprintf(tw, "%s\t%s\n", row[0], oneLine(row[1])); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func printCreatorListingVersions(w io.Writer, resp creatorMarketListingVersionsResponse) error {
+	if len(resp.Items) == 0 {
+		_, err := fmt.Fprintln(w, "no listing versions")
+		return err
+	}
+	tw := newTabWriter(w)
+	if _, err := fmt.Fprintln(tw, "id\tversion\ttask_fixed_fee\ttask_fixed_fee_t\tstatus\tsale_status\texecution_availability_status\treview_status\tcreated_at"); err != nil {
+		return err
+	}
+	type versionNote struct {
+		id     string
+		label  string
+		reason string
+	}
+	notes := make([]versionNote, 0)
+	for _, item := range resp.Items {
+		if _, err := fmt.Fprintf(
+			tw,
+			"%s\t%d\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+			item.ID,
+			int64(item.VersionNumber),
+			formatMoneyT(int64(item.TaskFixedFeeT), ""),
+			int64(item.TaskFixedFeeT),
+			oneLine(item.Status),
+			oneLine(item.SaleStatus),
+			oneLine(item.ExecutionAvailabilityStatus),
+			oneLine(item.ReviewStatus),
+			formatUnix(int64(item.CreatedAtUnix)),
+		); err != nil {
+			return err
+		}
+		if strings.TrimSpace(item.ExecutionBlockReason) != "" {
+			notes = append(notes, versionNote{id: item.ID, label: "execution_block_reason", reason: item.ExecutionBlockReason})
+		}
+		if strings.TrimSpace(item.ReviewReason) != "" {
+			notes = append(notes, versionNote{id: item.ID, label: "review_reason", reason: item.ReviewReason})
+		}
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	if len(notes) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintln(w, "notes:"); err != nil {
+		return err
+	}
+	for _, note := range notes {
+		if _, err := fmt.Fprintf(w, "- %s %s: %s\n", note.id, note.label, oneLine(note.reason)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

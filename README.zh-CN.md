@@ -263,7 +263,7 @@ Orchestration input 文件是 JSONL。对于常见的单根工作流，每个非
 
 ## 命令参考
 
-`taskFixedFeeT`、`amountT` 等金额值使用 API units，其中 10,000,000 units 等于 1 个货币单位。
+`taskFixedFeeT`、`amountT` 等金额值使用 API units，其中 10,000,000 units 等于 1 个货币单位。Market 与账务相关命令（`market list/show/quote/run`、`market workbook quote/run`、`listing list/show/versions`、`usage list/get`、`creator transactions`）的默认文本输出会自动把这些金额换算为可读格式（例如 `CNY 0.5000000`），同时保留原始 `*T` 值用于对账。`--output json` 始终返回后端原始 `*T` 字段，不做任何换算。
 
 ### 诊断
 

@@ -362,6 +362,193 @@ func TestMarketQuoteRejectsNullInputRowValue(t *testing.T) {
 	}
 }
 
+func TestMarketQuoteTextShowsFormattedAmounts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{
+				"quoteId":"quote-1",
+				"listingVersionId":"lv-1",
+				"currency":"CNY",
+				"estimatedExecutionCostT":69300,
+				"taskFixedFeeT":5000000,
+				"taskCount":2,
+				"estimatedBuyerPayableT":10069300
+			}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":"review this"}]}`)
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketQuoteCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market quote command error = %v", err)
+	}
+	for _, want := range []string{
+		"CNY 0.5000000",
+		"taskFixedFeeT",
+		"5000000",
+		"CNY 1.0069300",
+		"estimatedBuyerPayableT",
+		"10069300",
+		"CNY 0.0069300",
+		"estimatedExecutionCostT",
+		"69300",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestMarketQuoteTextUnknownCurrencyFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1","taskFixedFeeT":5000000,"estimatedBuyerPayableT":5000000}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":"review this"}]}`)
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketQuoteCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market quote command error = %v", err)
+	}
+	if !strings.Contains(out.String(), "(currency unknown) 5000000") {
+		t.Fatalf("output=%s want currency-unknown fallback", out.String())
+	}
+}
+
+func TestMarketQuoteJSONPreservesRawFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1","currency":"CNY","taskFixedFeeT":5000000,"estimatedBuyerPayableT":5069300}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":"review this"}]}`)
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second, output: "json"}
+	cmd := newMarketQuoteCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market quote command error = %v", err)
+	}
+	for _, want := range []string{`"taskFixedFeeT": 5000000`, `"estimatedBuyerPayableT": 5069300`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+	if strings.Contains(out.String(), "CNY ") {
+		t.Fatalf("output=%s json mode must not format money", out.String())
+	}
+}
+
+func TestMarketListTextShowsFormattedFee(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"id":"listing-1","displayName":"Writer","taskFixedFeeT":5000000,"executionAvailabilityStatus":"available","listingVersionId":"lv-1"}]}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketListCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market list command error = %v", err)
+	}
+	for _, want := range []string{"(currency unknown) 5000000", "5000000"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestMarketRunExecutionTextShowsFormattedAmounts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/loom/v1/marketListings/listing-1":
+			_, _ = w.Write([]byte(marketListingDetailBody(t)))
+		case "/loom/v1/marketListings/listing-1:quote":
+			_, _ = w.Write([]byte(`{"quoteId":"quote-1","currency":"CNY","estimatedBuyerPayableT":5069300}`))
+		case "/loom/v1/marketListings/listing-1:execute":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{
+				"runId":"run-1",
+				"runTransactionId":"transaction-1",
+				"skillName":"",
+				"taskFixedFeeT":5000000,
+				"estimatedExecutionCostT":0,
+				"estimatedBuyerPayableT":5069300,
+				"actualExecutionCostT":0,
+				"finalBuyerPayableT":0,
+				"transactionStatus":"reserved"
+			}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inputPath := writeMarketInputFile(t, `{"inputRows":[{"prompt":"review this"}]}`)
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newMarketRunCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1", "--input-file", inputPath, "--confirm"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("market run command error = %v", err)
+	}
+	for _, want := range []string{
+		"(currency unknown) 5000000",
+		"taskFixedFeeT",
+		"(currency unknown) 5069300",
+		"estimatedBuyerPayableT",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+	// An empty skillName from the backend must not leave a blank row.
+	if strings.Contains(out.String(), "skillName") {
+		t.Fatalf("output=%s should omit empty skillName row", out.String())
+	}
+}
+
 func TestMarketRunQuotesWithoutConfirmAndDoesNotExecute(t *testing.T) {
 	var paths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

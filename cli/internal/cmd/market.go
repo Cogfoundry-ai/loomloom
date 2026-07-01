@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/Cogfoundry-ai/loomloom/cli/internal/client"
 	"github.com/spf13/cobra"
@@ -905,15 +906,16 @@ func printMarketListings(w io.Writer, resp marketListingsResponse) error {
 		return nil
 	}
 	tw := newTabWriter(w)
-	if _, err := fmt.Fprintln(tw, "id\tname\ttask_fixed_fee_t\tavailability\tversion\tdescription"); err != nil {
+	if _, err := fmt.Fprintln(tw, "id\tname\ttask_fixed_fee\ttask_fixed_fee_t\tavailability\tversion\tdescription"); err != nil {
 		return err
 	}
 	for _, item := range resp.Items {
 		if _, err := fmt.Fprintf(
 			tw,
-			"%s\t%s\t%d\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
 			item.ID,
 			oneLine(item.DisplayName),
+			formatMoneyT(int64(item.TaskFixedFeeT), ""),
 			int64(item.TaskFixedFeeT),
 			oneLine(item.ExecutionAvailabilityStatus),
 			oneLine(item.ListingVersionID),
@@ -939,6 +941,7 @@ func printMarketListingDetail(w io.Writer, listing marketListingPublicResponse) 
 		{"display_name", listing.DisplayName},
 		{"description", listing.Description},
 		{"listing_version_id", listing.ListingVersionID},
+		{"task_fixed_fee", formatMoneyT(int64(listing.TaskFixedFeeT), "")},
 		{"task_fixed_fee_t", fmt.Sprintf("%d", int64(listing.TaskFixedFeeT))},
 		{"sale_status", listing.SaleStatus},
 		{"execution_availability_status", listing.ExecutionAvailabilityStatus},
@@ -1011,38 +1014,91 @@ func printMarketListingDetail(w io.Writer, listing marketListingPublicResponse) 
 }
 
 func printMarketQuote(w io.Writer, resp map[string]any) error {
-	return printMarketMapFields(w, resp, []string{
-		"quoteId",
-		"listingVersionId",
-		"currency",
-		"estimatedExecutionCostT",
-		"taskFixedFeeT",
-		"taskCount",
-		"estimatedBuyerPayableT",
-	})
+	currency := stringMapValue(resp, "currency")
+	if currency == "-" {
+		currency = ""
+	}
+	tw := newTabWriter(w)
+	for _, key := range []string{"quoteId", "listingVersionId", "currency"} {
+		if err := printStringMapField(tw, resp, key); err != nil {
+			return err
+		}
+	}
+	if err := printMoneyMapField(tw, resp, "estimated_execution_cost", "estimatedExecutionCostT", currency); err != nil {
+		return err
+	}
+	if err := printMoneyMapField(tw, resp, "task_fixed_fee", "taskFixedFeeT", currency); err != nil {
+		return err
+	}
+	if value, ok := resp["taskCount"]; ok && value != nil {
+		if _, err := fmt.Fprintf(tw, "taskCount\t%s\n", displayJSONValue(value)); err != nil {
+			return err
+		}
+	}
+	if err := printMoneyMapField(tw, resp, "estimated_payable", "estimatedBuyerPayableT", currency); err != nil {
+		return err
+	}
+	return tw.Flush()
 }
 
 func printMarketExecution(w io.Writer, resp map[string]any) error {
-	return printMarketMapFields(w, resp, []string{
-		"runTransactionId",
-		"runId",
-		"listingId",
-		"listingVersionId",
-		"estimatedBuyerPayableT",
-		"transactionStatus",
-	})
-}
-
-func printMarketMapFields(w io.Writer, resp map[string]any, keys []string) error {
 	tw := newTabWriter(w)
-	for _, key := range keys {
-		if value, ok := resp[key]; ok && value != nil {
-			if _, err := fmt.Fprintf(tw, "%s\t%s\n", key, displayJSONValue(value)); err != nil {
-				return err
-			}
+	for _, key := range []string{"runTransactionId", "runId", "listingId", "listingVersionId", "skillName"} {
+		if err := printStringMapField(tw, resp, key); err != nil {
+			return err
 		}
 	}
+	// The execute response does not include a currency field.
+	if err := printMoneyMapField(tw, resp, "task_fixed_fee", "taskFixedFeeT", ""); err != nil {
+		return err
+	}
+	if err := printMoneyMapField(tw, resp, "estimated_execution_cost", "estimatedExecutionCostT", ""); err != nil {
+		return err
+	}
+	if err := printMoneyMapField(tw, resp, "estimated_payable", "estimatedBuyerPayableT", ""); err != nil {
+		return err
+	}
+	if err := printMoneyMapField(tw, resp, "actual_execution_cost", "actualExecutionCostT", ""); err != nil {
+		return err
+	}
+	if err := printMoneyMapField(tw, resp, "final_payable", "finalBuyerPayableT", ""); err != nil {
+		return err
+	}
+	if err := printStringMapField(tw, resp, "transactionStatus"); err != nil {
+		return err
+	}
 	return tw.Flush()
+}
+
+// printStringMapField writes a "key<TAB>value" row for a string field in a
+// decoded JSON map. It is a no-op when the field is absent, nil, or an empty
+// string so the backend omitting a value does not leave a blank row.
+func printStringMapField(tw *tabwriter.Writer, resp map[string]any, key string) error {
+	value, ok := resp[key]
+	if !ok || value == nil {
+		return nil
+	}
+	rendered := displayJSONValue(value)
+	if strings.TrimSpace(rendered) == "" {
+		return nil
+	}
+	_, err := fmt.Fprintf(tw, "%s\t%s\n", key, rendered)
+	return err
+}
+
+// printMoneyMapField writes a readable-money row followed by the raw *T row
+// for a field present in a decoded JSON map. It is a no-op if the field is
+// absent.
+func printMoneyMapField(tw *tabwriter.Writer, resp map[string]any, label string, rawKey string, currency string) error {
+	amountT, ok := int64MapValue(resp, rawKey)
+	if !ok {
+		return nil
+	}
+	if _, err := fmt.Fprintf(tw, "%s\t%s\n", label, formatMoneyT(amountT, currency)); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(tw, "%s\t%d\n", rawKey, amountT)
+	return err
 }
 
 func displayJSONValue(value any) string {

@@ -304,3 +304,160 @@ func TestListingWithdrawRejectsMultiplePendingReviews(t *testing.T) {
 		t.Fatalf("error=%v want sorted conflicting review IDs", err)
 	}
 }
+
+func TestListingListTextShowsFormattedFee(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{
+			"id":"listing-1",
+			"displayName":"Writer",
+			"status":"active",
+			"listingVersionId":"lv-1",
+			"reviewStatus":"approved",
+			"taskFixedFeeT":5000000,
+			"saleStatus":"on_sale",
+			"executionAvailabilityStatus":"available"
+		}]}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingListCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing list command error = %v", err)
+	}
+	for _, want := range []string{"(currency unknown) 5000000", "5000000", "approved", "on_sale", "available"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+	if strings.Contains(out.String(), "{") {
+		t.Fatalf("output=%s must not be raw JSON", out.String())
+	}
+}
+
+func TestListingListJSONPreservesRawFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"id":"listing-1","taskFixedFeeT":5000000,"newBackendField":"kept"}]}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second, output: "json"}
+	cmd := newListingListCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing list command error = %v", err)
+	}
+	for _, want := range []string{`"taskFixedFeeT": 5000000`, `"newBackendField": "kept"`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestListingShowTextShowsFormattedFee(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id":"listing-1",
+			"displayName":"Writer",
+			"status":"active",
+			"reviewStatus":"approved",
+			"taskFixedFeeT":5000000,
+			"saleStatus":"on_sale"
+		}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingShowCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing show command error = %v", err)
+	}
+	for _, want := range []string{"(currency unknown) 5000000", "task_fixed_fee_t", "approved"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestListingVersionsTextShowsFormattedFee(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{
+			"id":"lv-1",
+			"versionNumber":1,
+			"status":"active",
+			"saleStatus":"on_sale",
+			"reviewStatus":"approved",
+			"taskFixedFeeT":5000000,
+			"createdAtUnix":1700000000,
+			"executionAvailabilityStatus":"available"
+		}]}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingVersionsCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing versions command error = %v", err)
+	}
+	for _, want := range []string{"(currency unknown) 5000000", "lv-1", "approved", "available"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestListingVersionsTextShowsBlockedAndReviewNotes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{
+			"id":"lv-1",
+			"versionNumber":1,
+			"status":"rejected",
+			"saleStatus":"unlisted",
+			"reviewStatus":"rejected",
+			"reviewReason":"input schema missing required field",
+			"taskFixedFeeT":5000000,
+			"createdAtUnix":1700000000,
+			"executionAvailabilityStatus":"blocked",
+			"executionBlockReason":"source template version was withdrawn"
+		}]}`))
+	}))
+	defer server.Close()
+
+	opts := &rootOptions{server: server.URL + "/loom/v1", timeout: time.Second}
+	cmd := newListingVersionsCmd(opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"listing-1"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("listing versions command error = %v", err)
+	}
+	for _, want := range []string{
+		"blocked",
+		"source template version was withdrawn",
+		"input schema missing required field",
+		"notes:",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("output=%s missing %q", out.String(), want)
+		}
+	}
+}

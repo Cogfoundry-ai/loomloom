@@ -263,7 +263,7 @@ Use the [CogFoundry Console](https://console-dev.cogfoundry.ai/quickstart) to in
 
 ## Command Reference
 
-Monetary values such as `taskFixedFeeT` and `amountT` are in API units, where 10,000,000 units equal 1 currency unit.
+Monetary values such as `taskFixedFeeT` and `amountT` are in API units, where 10,000,000 units equal 1 currency unit. Default text output for Market and usage commands (`market list/show/quote/run`, `market workbook quote/run`, `listing list/show/versions`, `usage list/get`, `creator transactions`) automatically converts these to human-readable amounts (e.g. `CNY 0.5000000`) while still printing the raw `*T` value alongside it for reconciliation. `--output json` always returns the backend's raw `*T` fields unchanged.
 
 ### Diagnostics
 
