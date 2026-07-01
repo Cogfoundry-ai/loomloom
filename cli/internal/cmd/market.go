@@ -1017,7 +1017,6 @@ func printMarketQuote(w io.Writer, resp map[string]any) error {
 		"currency",
 		"estimatedExecutionCostT",
 		"taskFixedFeeT",
-		"creatorEarningT",
 		"taskCount",
 		"estimatedBuyerPayableT",
 	})

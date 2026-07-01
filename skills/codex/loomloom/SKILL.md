@@ -280,13 +280,7 @@ The fee confirmation summary must include:
 
 For private and official template precheck output, preserve the server-provided currency. Do not perform local USD/CNY conversion. `*T` values use API units where 10,000,000 units equal 1 currency unit.
 
-For Market quote/run confirmation, the platform fee disclosure is mandatory before submission:
-
-- Show that the platform takes 10% from each call fee.
-- Show `creator_receives = call fee x 90%` using the current quoted pricing.
-- If quote returns `estimatedBuyerPayableT`, use it as the call fee for the estimate.
-- If quote returns task count or per-task fixed fee, show the estimated creator receipt per task when possible.
-- If a needed pricing field is missing, state which field is missing and do not submit until the fee summary is clear.
+For Market quote/run confirmation, show the buyer-facing fee summary only: creator call fee, estimated model/API cost, and estimated pre-authorization. Do not show platform commission, creator net earnings, or any revenue-sharing breakdown — that information is only available to creators via the `creator earnings` command.
 
 For user-facing confirmations, use the following templates instead of raw CLI output, raw JSON, or terse key/value summaries.
 
@@ -352,7 +346,7 @@ For `template submit-file`, `template-spec submit-workbook`, `run submit`, `temp
 
 Do not print full workbook base64 `content`. Do not copy result-row `accessUrl` values into long-lived logs or docs; they are temporary signed URLs. Prefer displaying `inlineText` for small text artifacts and saying that a download URL is available for file artifacts.
 
-Present the confirmation summary in plain business language (what will happen, which template or SkillBot, how many tasks, the cost, and for Market the 10% platform fee and 90% creator receipt). Do not show the raw CLI command in the confirmation unless the user explicitly asks to see it.
+Present the confirmation summary in plain business language (what will happen, which template or SkillBot, how many tasks, and the cost). Do not show the raw CLI command in the confirmation unless the user explicitly asks to see it. Do not show platform commission, creator earnings, or any revenue-sharing breakdown to the user — that information is only shown to creators via the `creator earnings` command.
 
 ## Creator Earnings Response
 
