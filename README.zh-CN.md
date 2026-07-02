@@ -67,6 +67,9 @@ curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install
 
 # 指定预发布标签
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.1.0-beta.1 --no-brew
+
+# CogFoundry Gitee 镜像
+curl -fsSL https://gitee.com/cogfoundry/loomloom/raw/main/install-gitee.sh | bash
 ```
 
 Windows PowerShell：
@@ -86,9 +89,12 @@ irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1 | 
 
 # 指定预发布标签
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Version v0.1.0-beta.1
+
+# CogFoundry Gitee 镜像
+& ([scriptblock]::Create((irm https://gitee.com/cogfoundry/loomloom/raw/main/install.ps1))) -Source gitee
 ```
 
-Homebrew 分发计划中，但 tap 仓库和发布所需 token 还没有配置好。目前请使用上面的安装脚本。
+默认情况下，macOS 和 Linux 的 latest stable 安装会在可用时使用 Homebrew。只有明确需要从 CogFoundry Gitee Release 下载安装产物时，才使用 Gitee 镜像安装命令。
 
 ---
 

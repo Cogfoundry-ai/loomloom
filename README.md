@@ -67,6 +67,9 @@ curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install
 
 # Specific pre-release tag
 curl -fsSL https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.sh | bash -s -- --version v0.1.0-beta.1
+
+# CogFoundry Gitee mirror
+curl -fsSL https://gitee.com/cogfoundry/loomloom/raw/main/install-gitee.sh | bash
 ```
 
 Windows PowerShell:
@@ -86,9 +89,12 @@ irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1 | 
 
 # Specific pre-release tag
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Cogfoundry-ai/loomloom/main/install.ps1))) -Version v0.1.0-beta.1
+
+# CogFoundry Gitee mirror
+& ([scriptblock]::Create((irm https://gitee.com/cogfoundry/loomloom/raw/main/install.ps1))) -Source gitee
 ```
 
-Homebrew distribution is planned, but the tap repository and the token required for publishing are not yet configured. For now, use the install script above.
+By default, macOS and Linux latest-stable installs use Homebrew when available. Use the CogFoundry Gitee mirror command only when you explicitly want to install from Gitee Release assets.
 
 ---
 

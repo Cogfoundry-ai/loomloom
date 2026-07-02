@@ -141,10 +141,10 @@ done < <(find "$dist_dir" -type f -name 'loomloom-*' | sort)
 echo "packaging skills"
 tar -C "$repo_root" -czf "$out_dir/loomloom-skills.tar.gz" skills
 zip_file "$out_dir/loomloom-skills.zip" "$repo_root" skills
-cp "$repo_root"/install.sh "$repo_root"/install.ps1 \
+cp "$repo_root"/install.sh "$repo_root"/install-gitee.sh "$repo_root"/install.ps1 \
   "$repo_root"/uninstall.sh "$repo_root"/uninstall.ps1 \
   "$repo_root"/manifest.json "$repo_root"/README.md "$out_dir"/
 
-(cd "$out_dir" && $(checksum_cmd) * > checksums.txt)
+(cd "$out_dir" && $(checksum_cmd) -- * > checksums.txt)
 
 echo "release assets written to $out_dir"
